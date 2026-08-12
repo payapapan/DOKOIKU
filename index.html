@@ -88,6 +88,35 @@ button { font-family: inherit; border: none; cursor: pointer; }
 .pressable { transition: transform 0.1s ease-in-out, background-color 0.2s, color 0.2s; }
 .pressable:active { transform: scale(0.95); }
 
+/* デバッグログ */
+.debug-toggle {
+  width: 100%;
+  height: 36px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  border: 0.5px solid var(--separator);
+}
+.debug-panel { margin-top: 8px; }
+.debug-actions { display: flex; gap: 8px; margin-bottom: 8px; }
+.debug-actions .mini-btn { flex: 0 0 auto; }
+.debug-actions .secondary-btn { flex: 0 0 auto; height: 40px; padding: 0 14px; }
+.debug-log-text {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 10px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 240px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* 移動時間スライダー */
 .time-slider-value {
   font-size: 22px;
@@ -465,6 +494,18 @@ button { font-family: inherit; border: none; cursor: pointer; }
     <div class="section">
       <div class="section-title">地図アプリ</div>
       <div class="section-body" id="mapapp-options"></div>
+    </div>
+
+    <!-- デバッグログ -->
+    <div class="section debug-section">
+      <button id="btn-toggle-debug" class="debug-toggle pressable">デバッグログ</button>
+      <div id="debug-panel" class="debug-panel" style="display:none">
+        <div class="debug-actions">
+          <button id="btn-copy-log" class="mini-btn pressable">コピー</button>
+          <button id="btn-clear-log" class="secondary-btn pressable">クリア</button>
+        </div>
+        <pre id="debug-log-text" class="debug-log-text"></pre>
+      </div>
     </div>
 
     <!-- ルーレットボタン -->
@@ -873,15 +914,24 @@ async function loadAnchors() {
   anchorsPromise = (async () => {
     try {
       const cached = localStorage.getItem(ANCHORS_CACHE_KEY);
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        logDebug(`拠点データ: キャッシュから読み込み ${parsed.length}件`);
+        return parsed;
+      }
     } catch { /* localStorage不可の環境ではキャッシュをスキップ */ }
     try {
       const res = await fetch("anchors.json");
-      if (!res.ok) return [];
+      if (!res.ok) {
+        logDebug(`拠点データ: 取得失敗 HTTP ${res.status}`);
+        return [];
+      }
       const data = await res.json(); // [[name, lat, lng], ...]
       try { localStorage.setItem(ANCHORS_CACHE_KEY, JSON.stringify(data)); } catch { /* 保存できなくても続行 */ }
+      logDebug(`拠点データ: サーバーから取得しキャッシュに保存 ${data.length}件`);
       return data;
-    } catch {
+    } catch (err) {
+      logDebug(`拠点データ: 取得エラー ${err && err.message}`);
       return [];
     }
   })();
@@ -944,6 +994,8 @@ async function executeRoulette() {
   $("loading").classList.add("visible");
   const startedAt = Date.now();
 
+  logDebug(`=== ルーレット開始 ジャンル=${state.genre}/${state.subGenre} 移動手段=${state.transport} 時間=${state.time}分 方角=[${state.directions.join(",") || "指定なし"}] 出発地=(${state.origin.lat.toFixed(5)},${state.origin.lng.toFixed(5)})`);
+
   try {
     const genre = GENRES[state.genre];
     const subFilters = genre.sub[state.subGenre].filters;
@@ -955,6 +1007,7 @@ async function executeRoulette() {
     for (let attempt = 0; attempt < 5 && candidates.length === 0; attempt++) {
       const dest = randomDestinationPoint();
       const radiusM = searchRadiusMeters(dest.medianKm);
+      logDebug(`[試行${attempt + 1}/5] 理想地点=(${dest.lat.toFixed(5)},${dest.lng.toFixed(5)}) 中央値距離=${dest.medianKm.toFixed(2)}km 検索半径=${radiusM}m`);
 
       // 拠点スナップ: 理想の目的地点付近に駅・役所があれば、そこを検索中心に採用する
       let center = dest;
@@ -964,19 +1017,27 @@ async function executeRoulette() {
         const anchor = findNearestAnchor(dest, snapRadiusM, anchors);
         if (anchor) {
           center = anchor;
-          // 拠点周辺は施設密度が高いため、半径を縮小してOverpass側の負荷とタイムアウトリスクを抑える
           effectiveRadiusM = Math.max(500, Math.round(radiusM * 0.6));
+          logDebug(`  拠点スナップ: 「${anchor.name}」(${anchor.lat},${anchor.lng}) 半径${snapRadiusM}m以内で発見 → 検索半径を${effectiveRadiusM}mに縮小`);
+        } else {
+          logDebug(`  拠点スナップ: 半径${snapRadiusM}m以内に拠点なし → 理想地点のまま検索`);
         }
       }
 
       // 1回の試行が失敗(タイムアウト等)しても、ループ全体を落とさず次のリトライに進む
       try {
+        const t0 = Date.now();
         candidates = await overpassSearch(center, subFilters, effectiveRadiusM);
+        logDebug(`  サブジャンル検索: ${candidates.length}件 (${Date.now() - t0}ms)`);
         // 検索クエリの緩和: サブジャンル→大ジャンル (§6.6)
         if (candidates.length === 0 && state.subGenre !== "omakase") {
+          const t1 = Date.now();
           candidates = await overpassSearch(center, omakaseFilters, effectiveRadiusM);
+          logDebug(`  大ジャンル緩和検索: ${candidates.length}件 (${Date.now() - t1}ms)`);
         }
-      } catch {
+      } catch (err) {
+        const reason = err && err.name === "AbortError" ? "タイムアウト" : (err && err.message) || "不明なエラー";
+        logDebug(`  検索失敗: ${reason}`);
         candidates = [];
       }
     }
@@ -986,14 +1047,17 @@ async function executeRoulette() {
     if (elapsed < 500) await new Promise((r) => setTimeout(r, 500 - elapsed));
 
     if (candidates.length === 0) {
+      logDebug(`=== 5回全て失敗。候補なし (${Date.now() - startedAt}ms) ===`);
       failToIdle("条件に合う場所が\n見つかりませんでした",
         "移動時間を長くする、方角の制限を解除する、別のジャンルを試す、などをお試しください。");
       return;
     }
 
+    logDebug(`=== 成功: ${candidates.length}件の候補から抽選 (合計${Date.now() - startedAt}ms) ===`);
     state.lastCandidates = candidates;
     presentRandomPick();
-  } catch {
+  } catch (err) {
+    logDebug(`=== 想定外のエラー: ${err && err.message} ===`);
     const elapsed = Date.now() - startedAt;
     if (elapsed < 500) await new Promise((r) => setTimeout(r, 500 - elapsed));
     failToIdle("検索に失敗しました", "ネットワーク接続を確認して、もう一度お試しください。");
@@ -1134,6 +1198,7 @@ $("btn-home").addEventListener("click", goHome);
 
 /* ---------- アラート / トースト ---------- */
 function showAlert(title, message) {
+  logDebug(`[ALERT] ${title.replace(/\n/g, "")}: ${message}`);
   $("alert-title").textContent = title;
   $("alert-message").textContent = message;
   $("alert").classList.add("visible");
@@ -1148,6 +1213,58 @@ function showToast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove("visible"), 2000);
 }
+
+/* ---------- デバッグログ ---------- */
+const DEBUG_LOG_MAX = 300;
+let debugLog = [];
+
+function logDebug(msg) {
+  const d = new Date();
+  const ts = d.toTimeString().slice(0, 8) + "." + String(d.getMilliseconds()).padStart(3, "0");
+  debugLog.push(`[${ts}] ${msg}`);
+  if (debugLog.length > DEBUG_LOG_MAX) debugLog.shift();
+  renderDebugLog();
+}
+
+function renderDebugLog() {
+  const el = $("debug-log-text");
+  if (el) el.textContent = debugLog.length ? debugLog.join("\n") : "(まだログがありません)";
+}
+
+$("btn-toggle-debug").addEventListener("click", () => {
+  const panel = $("debug-panel");
+  const willShow = panel.style.display === "none";
+  panel.style.display = willShow ? "" : "none";
+  if (willShow) {
+    renderDebugLog();
+    const el = $("debug-log-text");
+    requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+  }
+});
+
+$("btn-copy-log").addEventListener("click", async () => {
+  const text = debugLog.join("\n");
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast("ログをコピーしました");
+  } catch {
+    // Clipboard APIが使えない環境向けフォールバック: テキストを選択状態にする
+    const el = $("debug-log-text");
+    if (el && window.getSelection) {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    showToast("選択したので手動でコピーしてください");
+  }
+});
+
+$("btn-clear-log").addEventListener("click", () => {
+  debugLog = [];
+  renderDebugLog();
+});
 
 /* ---------- 初期化 ---------- */
 renderTimeTicks();
