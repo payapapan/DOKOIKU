@@ -909,11 +909,19 @@ function buildOverpassQuery(center, filters, radiusM) {
 }
 
 async function overpassSearch(center, filters, radiusM) {
-  const res = await fetch("https://overpass-api.de/api/interpreter", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: "data=" + encodeURIComponent(buildOverpassQuery(center, filters, radiusM)),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 16000); // サーバー側15秒設定+マージン
+  let res;
+  try {
+    res = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "data=" + encodeURIComponent(buildOverpassQuery(center, filters, radiusM)),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
   if (!res.ok) throw new Error("overpass");
   const data = await res.json();
   return (data.elements || [])
@@ -950,16 +958,26 @@ async function executeRoulette() {
 
       // 拠点スナップ: 理想の目的地点付近に駅・役所があれば、そこを検索中心に採用する
       let center = dest;
+      let effectiveRadiusM = radiusM;
       if (anchors.length > 0) {
         const snapRadiusM = anchorSnapRadiusMeters(dest.medianKm);
         const anchor = findNearestAnchor(dest, snapRadiusM, anchors);
-        if (anchor) center = anchor;
+        if (anchor) {
+          center = anchor;
+          // 拠点周辺は施設密度が高いため、半径を縮小してOverpass側の負荷とタイムアウトリスクを抑える
+          effectiveRadiusM = Math.max(500, Math.round(radiusM * 0.6));
+        }
       }
 
-      candidates = await overpassSearch(center, subFilters, radiusM);
-      // 検索クエリの緩和: サブジャンル→大ジャンル (§6.6)
-      if (candidates.length === 0 && state.subGenre !== "omakase") {
-        candidates = await overpassSearch(center, omakaseFilters, radiusM);
+      // 1回の試行が失敗(タイムアウト等)しても、ループ全体を落とさず次のリトライに進む
+      try {
+        candidates = await overpassSearch(center, subFilters, effectiveRadiusM);
+        // 検索クエリの緩和: サブジャンル→大ジャンル (§6.6)
+        if (candidates.length === 0 && state.subGenre !== "omakase") {
+          candidates = await overpassSearch(center, omakaseFilters, effectiveRadiusM);
+        }
+      } catch {
+        candidates = [];
       }
     }
 
