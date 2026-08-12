@@ -88,6 +88,83 @@ button { font-family: inherit; border: none; cursor: pointer; }
 .pressable { transition: transform 0.1s ease-in-out, background-color 0.2s, color 0.2s; }
 .pressable:active { transform: scale(0.95); }
 
+/* 移動時間スライダー */
+.time-slider-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+.time-slider-wrap { position: relative; }
+.time-slider {
+  width: 100%;
+  height: 32px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  margin-top: 8px;
+  position: relative;
+  z-index: 2;
+}
+.time-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-tertiary);
+}
+.time-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  margin-top: -12px;
+  opacity: 0; /* 見た目は独自描画のつまみに任せ、当たり判定のみ利用する */
+}
+.time-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-tertiary);
+}
+.time-slider::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  opacity: 0;
+}
+.time-slider-thumb {
+  position: absolute;
+  top: 24px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 1;
+}
+.time-slider-ticks {
+  position: relative;
+  height: 16px;
+  margin-top: 2px;
+}
+.time-slider-ticks span {
+  position: absolute;
+  top: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.time-slider-ticks span:first-child { transform: translateX(0); }
+.time-slider-ticks span:last-child { transform: translateX(-100%); }
+
 /* Option Button: 48px / r8 / 選択時ブルー+チェック */
 .option-btn {
   height: 48px;
@@ -357,7 +434,12 @@ button { font-family: inherit; border: none; cursor: pointer; }
     <!-- 移動時間 -->
     <div class="section">
       <div class="section-title">移動時間</div>
-      <div class="section-body" id="time-options"></div>
+      <div class="time-slider-value" id="time-value"></div>
+      <div class="time-slider-wrap">
+        <input type="range" id="time-slider" class="time-slider" min="0" step="1">
+        <div class="time-slider-thumb" id="time-thumb"></div>
+      </div>
+      <div class="time-slider-ticks" id="time-ticks"></div>
     </div>
 
     <!-- 方角 -->
@@ -469,11 +551,16 @@ button { font-family: inherit; border: none; cursor: pointer; }
 
 /* ---------- 定数 (Constants.swift相当) ---------- */
 const TRANSPORT = {
-  walk:    { label: "歩き",         speed: 4.0,  times: [15, 30, 60],            mapMode: { apple: "w", google: "walking" } },
-  bicycle: { label: "自転車",       speed: 15.0, times: [30, 60],                mapMode: { apple: "w", google: "bicycling" } },
-  car:     { label: "車",           speed: 30.0, times: [15, 30, 60, 120, 300],  mapMode: { apple: "d", google: "driving" } },
-  transit: { label: "公共交通機関", speed: 25.0, times: [30, 60],                mapMode: { apple: "r", google: "transit" } },
+  walk:    { label: "歩き",         speed: 4.0,  mapMode: { apple: "w", google: "walking" } },
+  bicycle: { label: "自転車",       speed: 15.0, mapMode: { apple: "w", google: "bicycling" } },
+  car:     { label: "車",           speed: 30.0, mapMode: { apple: "d", google: "driving" } },
+  transit: { label: "公共交通機関", speed: 25.0, mapMode: { apple: "r", google: "transit" } },
 };
+/* 移動時間スライダーの刻み値 (全移動手段共通、最大5時間):
+   0〜2時間: 15分刻み / 2〜5時間: 30分刻み */
+const TIME_STEPS = [];
+for (let m = 15; m <= 120; m += 15) TIME_STEPS.push(m);
+for (let m = 150; m <= 300; m += 30) TIME_STEPS.push(m);
 const DIRECTIONS = {
   north: { label: "北", deg: 0,   icon: "M5 10l7-7m0 0l7 7m-7-7v18" },
   east:  { label: "東", deg: 90,  icon: "M14 5l7 7m0 0l-7 7m7-7H3" },
@@ -568,7 +655,7 @@ const state = {
   lastCandidates: null,              // 直近の検索候補 (再抽選の高速化)
 };
 if (!TRANSPORT[state.transport]) state.transport = "walk";
-if (!TRANSPORT[state.transport].times.includes(state.time)) state.time = TRANSPORT[state.transport].times[0];
+if (!TIME_STEPS.includes(state.time)) state.time = 30;
 if (state.genre && !GENRES[state.genre]) state.genre = null;
 if (state.genre && !GENRES[state.genre].sub[state.subGenre]) state.subGenre = "omakase";
 if (!MAP_APPS[state.mapApp]) state.mapApp = "apple";
@@ -592,16 +679,10 @@ function renderOptionGroup(containerId, items, selectedKey, onSelect) {
 function renderAll() {
   renderOptionGroup("transport-options", TRANSPORT, state.transport, (key) => {
     state.transport = key;
-    if (!TRANSPORT[key].times.includes(state.time)) state.time = TRANSPORT[key].times[0];
     persistAndRender();
   });
 
-  const timeItems = {};
-  for (const t of TRANSPORT[state.transport].times) timeItems[t] = { label: formatMinutes(t) };
-  renderOptionGroup("time-options", timeItems, String(state.time), (key) => {
-    state.time = Number(key);
-    persistAndRender();
-  });
+  renderTimeSlider();
 
   const dirEl = $("direction-options");
   dirEl.innerHTML = "";
@@ -653,6 +734,50 @@ function formatMinutes(min) {
   const h = Math.floor(min / 60), m = min % 60;
   return m === 0 ? `${h}時間` : `${h}時間${m}分`;
 }
+
+/* 時間(分) → スライダー上の表示位置(%)
+   0〜120分(15分刻み区間)と120〜300分(30分刻み区間)を、
+   それぞれ「真の時間0分/120分/300分」を起点とした線形区間として扱う。
+   目盛りとつまみの位置計算を同じ式で行うことで、両者を完全に一致させる。 */
+const TIME_SEG_BOUNDARY_MM = 120;
+const TIME_SEG_BOUNDARY_PCT = (TIME_STEPS.indexOf(TIME_SEG_BOUNDARY_MM) / (TIME_STEPS.length - 1)) * 100;
+function mmToPercent(mm) {
+  if (mm <= TIME_SEG_BOUNDARY_MM) {
+    return (mm / TIME_SEG_BOUNDARY_MM) * TIME_SEG_BOUNDARY_PCT;
+  }
+  const maxMm = TIME_STEPS[TIME_STEPS.length - 1];
+  const t = (mm - TIME_SEG_BOUNDARY_MM) / (maxMm - TIME_SEG_BOUNDARY_MM);
+  return TIME_SEG_BOUNDARY_PCT + t * (100 - TIME_SEG_BOUNDARY_PCT);
+}
+
+function renderTimeTicks() {
+  const el = $("time-ticks");
+  const hourMarks = [0, 60, 120, 180, 240, 300]; // 0h,1h,2h,3h,4h,5h (分)
+  el.innerHTML = "";
+  for (const mm of hourMarks) {
+    const span = document.createElement("span");
+    span.style.left = `${mmToPercent(mm)}%`;
+    span.textContent = `${mm / 60}h`;
+    el.appendChild(span);
+  }
+}
+
+function renderTimeSlider() {
+  const slider = $("time-slider");
+  slider.max = String(TIME_STEPS.length - 1);
+  const idx = TIME_STEPS.indexOf(state.time);
+  const safeIdx = idx >= 0 ? idx : TIME_STEPS.indexOf(30);
+  slider.value = String(safeIdx);
+  $("time-value").textContent = formatMinutes(state.time);
+  $("time-thumb").style.left = `${mmToPercent(TIME_STEPS[safeIdx])}%`;
+}
+
+$("time-slider").addEventListener("input", (e) => {
+  state.time = TIME_STEPS[Number(e.target.value)];
+  $("time-value").textContent = formatMinutes(state.time);
+  $("time-thumb").style.left = `${mmToPercent(state.time)}%`;
+});
+$("time-slider").addEventListener("change", persistAndRender);
 
 /* ---------- 出発地点 ---------- */
 function setOrigin(lat, lng, label) {
@@ -950,6 +1075,7 @@ function showToast(msg) {
 }
 
 /* ---------- 初期化 ---------- */
+renderTimeTicks();
 renderAll();
 </script>
 </body>
