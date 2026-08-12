@@ -636,9 +636,9 @@ const GENRES = {
   sightseeing: {
     label: "観光",
     sub: {
-      omakase: { label: "おまかせ", filters: ['nw["tourism"~"^(attraction|museum|gallery|zoo|aquarium|viewpoint|theme_park)$"]', 'nw["historic"]', 'nw["leisure"="garden"]'] },
+      omakase: { label: "おまかせ", filters: ['nw["tourism"~"^(attraction|museum|gallery|zoo|aquarium|viewpoint|theme_park)$"]', 'nw["historic"~"^(castle|castle_wall|monument|memorial|archaeological_site|ruins|city_gate|tomb)$"]', 'nw["leisure"="garden"]'] },
       nature:  { label: "自然", filters: ['nw["leisure"~"^(garden|nature_reserve)$"]', 'nw["tourism"="viewpoint"]', 'nw["natural"~"^(peak|beach|spring|waterfall)$"]'] },
-      history: { label: "歴史", filters: ['nw["historic"]', 'nw["amenity"="place_of_worship"]'] },
+      history: { label: "歴史", filters: ['nw["historic"~"^(castle|castle_wall|monument|memorial|archaeological_site|ruins|city_gate|tomb)$"]', 'nw["amenity"="place_of_worship"]'] },
       museum:  { label: "美術館・博物館", filters: ['nw["tourism"~"^(museum|gallery)$"]'] },
       zoo:     { label: "動物園・水族館", filters: ['nw["tourism"~"^(zoo|aquarium|theme_park)$"]'] },
     },
