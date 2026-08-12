@@ -337,8 +337,9 @@ button { font-family: inherit; border: none; cursor: pointer; }
 .anim-fade { animation: fadeIn 0.25s ease-out forwards; }
 @media (prefers-reduced-motion: reduce) {
   .anim-header, .anim-scale, .anim-left, .anim-up, .anim-fade { animation-duration: 0.01s; }
-  .loading-card svg { animation: none; }
+  .loading-card svg { animation: pulse 1.2s ease-in-out infinite; }
 }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
 .result-header { text-align: center; padding-top: 32px; }
 .result-header svg { width: 64px; height: 64px; color: var(--success); margin: 0 auto; display: block; }
