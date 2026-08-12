@@ -1014,6 +1014,9 @@ async function executeRoulette() {
     const omakaseFilters = genre.sub.omakase.filters;
     let candidates = [];
     const anchors = await loadAnchors();
+    // ミラーの開始位置をランダム化(毎回同じサーバーから始まると、そのサーバーだけ
+    // 負荷が集中してレート制限にかかりやすくなるため)
+    const mirrorStart = Math.floor(Math.random() * OVERPASS_ENDPOINTS.length);
 
     // 目的地点を別乱数で再計算しながら最大5回リトライ (§6.5)
     // 全体で40秒を超えたら打ち切る(失敗が続いた際に延々と待たせないため)
@@ -1047,7 +1050,7 @@ async function executeRoulette() {
       }
 
       // ミラーサーバーを試行ごとに切り替え、同一サーバーへの連続アクセスを避ける
-      const endpoint = OVERPASS_ENDPOINTS[attempt % OVERPASS_ENDPOINTS.length];
+      const endpoint = OVERPASS_ENDPOINTS[(mirrorStart + attempt) % OVERPASS_ENDPOINTS.length];
       const endpointHost = endpoint.replace(/^https?:\/\//, "").split("/")[0];
 
       // 1回の試行が失敗(タイムアウト等)しても、ループ全体を落とさず次のリトライに進む
