@@ -486,30 +486,30 @@ const GENRES = {
   food: {
     label: "食事",
     sub: {
-      omakase: { label: "おまかせ", filters: ['nwr["amenity"~"^(restaurant|cafe|fast_food|bar|pub|ice_cream)$"]'] },
-      cafe:    { label: "カフェ",   filters: ['nwr["amenity"="cafe"]'] },
-      lunch:   { label: "ランチ",   filters: ['nwr["amenity"~"^(restaurant|fast_food)$"]'] },
-      dinner:  { label: "ディナー", filters: ['nwr["amenity"="restaurant"]'] },
-      sweets:  { label: "スイーツ", filters: ['nwr["shop"~"^(confectionery|bakery|pastry)$"]', 'nwr["amenity"="ice_cream"]'] },
-      bar:     { label: "居酒屋・バー", filters: ['nwr["amenity"~"^(bar|pub)$"]', 'nwr["cuisine"="izakaya"]'] },
+      omakase: { label: "おまかせ", filters: ['nwr["amenity"~"^(restaurant|cafe|fast_food|bar|pub|ice_cream|biergarten|food_court)$"]'] },
+      cafe:    { label: "カフェ",   filters: ['nwr["amenity"="cafe"]', 'nwr["cuisine"~"coffee_shop"]'] },
+      lunch:   { label: "ランチ",   filters: ['nwr["amenity"~"^(restaurant|fast_food|food_court)$"]'] },
+      dinner:  { label: "ディナー", filters: ['nwr["amenity"="restaurant"]', 'nwr["amenity"="biergarten"]', 'nwr["cuisine"~"izakaya"]'] },
+      sweets:  { label: "スイーツ", filters: ['nwr["shop"~"^(confectionery|bakery|pastry|chocolate)$"]', 'nwr["amenity"="ice_cream"]', 'nwr["cuisine"~"cake"]'] },
+      bar:     { label: "居酒屋・バー", filters: ['nwr["amenity"~"^(bar|pub|biergarten)$"]', 'nwr["cuisine"~"izakaya"]'] },
     },
   },
   play: {
     label: "遊び",
     sub: {
-      omakase:  { label: "おまかせ", filters: ['nwr["shop"~"^(mall|department_store)$"]', 'nwr["amenity"~"^(cinema|theatre)$"]', 'nwr["leisure"~"^(park|sports_centre|bowling_alley|amusement_arcade)$"]', 'nwr["amenity"="library"]'] },
-      shopping: { label: "ショッピング", filters: ['nwr["shop"~"^(mall|department_store)$"]'] },
-      entertainment: { label: "エンタメ", filters: ['nwr["amenity"~"^(cinema|theatre)$"]', 'nwr["leisure"="amusement_arcade"]'] },
-      activity: { label: "アクティビティ", filters: ['nwr["leisure"~"^(sports_centre|bowling_alley|fitness_centre|ice_rink)$"]'] },
-      park:     { label: "公園", filters: ['nwr["leisure"="park"]'] },
-      culture:  { label: "文化", filters: ['nwr["amenity"~"^(library|arts_centre|community_centre)$"]'] },
+      omakase:  { label: "おまかせ", filters: ['nwr["shop"~"^(mall|department_store)$"]', 'nwr["amenity"~"^(cinema|theatre|nightclub)$"]', 'nwr["leisure"~"^(park|sports_centre|bowling_alley|amusement_arcade|escape_game|golf_course)$"]', 'nwr["amenity"="library"]'] },
+      shopping: { label: "ショッピング", filters: ['nwr["shop"~"^(mall|department_store|variety_store|gift)$"]'] },
+      entertainment: { label: "エンタメ", filters: ['nwr["amenity"~"^(cinema|theatre|nightclub)$"]', 'nwr["leisure"~"^(amusement_arcade|escape_game)$"]'] },
+      activity: { label: "アクティビティ", filters: ['nwr["leisure"~"^(sports_centre|bowling_alley|fitness_centre|ice_rink|climbing|golf_course)$"]'] },
+      park:     { label: "公園", filters: ['nwr["leisure"~"^(park|nature_reserve)$"]'] },
+      culture:  { label: "文化", filters: ['nwr["amenity"~"^(library|arts_centre|community_centre)$"]', 'nwr["tourism"="gallery"]'] },
     },
   },
   sightseeing: {
     label: "観光",
     sub: {
-      omakase: { label: "おまかせ", filters: ['nwr["tourism"~"^(attraction|museum|gallery|zoo|aquarium|viewpoint)$"]', 'nwr["historic"]', 'nwr["leisure"="garden"]'] },
-      nature:  { label: "自然", filters: ['nwr["leisure"="garden"]', 'nwr["tourism"="viewpoint"]', 'nwr["natural"~"^(peak|beach|spring)$"]'] },
+      omakase: { label: "おまかせ", filters: ['nwr["tourism"~"^(attraction|museum|gallery|zoo|aquarium|viewpoint|theme_park)$"]', 'nwr["historic"]', 'nwr["leisure"="garden"]'] },
+      nature:  { label: "自然", filters: ['nwr["leisure"~"^(garden|nature_reserve)$"]', 'nwr["tourism"="viewpoint"]', 'nwr["natural"~"^(peak|beach|spring|waterfall)$"]'] },
       history: { label: "歴史", filters: ['nwr["historic"]', 'nwr["amenity"="place_of_worship"]'] },
       museum:  { label: "美術館・博物館", filters: ['nwr["tourism"~"^(museum|gallery)$"]'] },
       zoo:     { label: "動物園・水族館", filters: ['nwr["tourism"~"^(zoo|aquarium|theme_park)$"]'] },
@@ -522,13 +522,17 @@ const MAP_APPS = { apple: "Apple Maps", google: "Google Maps" };
 const TAG_LABELS = {
   restaurant: "レストラン", cafe: "カフェ", fast_food: "ファストフード", bar: "バー", pub: "パブ",
   ice_cream: "アイスクリーム", confectionery: "菓子店", bakery: "ベーカリー", pastry: "洋菓子店",
+  chocolate: "チョコレート店", biergarten: "ビアガーデン", food_court: "フードコート",
   mall: "ショッピングモール", department_store: "百貨店", cinema: "映画館", theatre: "劇場",
   amusement_arcade: "ゲームセンター", sports_centre: "スポーツ施設", bowling_alley: "ボウリング場",
   fitness_centre: "フィットネス", ice_rink: "スケートリンク", park: "公園", garden: "庭園",
   library: "図書館", arts_centre: "アートセンター", community_centre: "文化センター",
   museum: "博物館・美術館", gallery: "ギャラリー", zoo: "動物園", aquarium: "水族館",
   theme_park: "テーマパーク", viewpoint: "展望スポット", attraction: "観光名所",
-  place_of_worship: "神社・寺院", peak: "山", beach: "ビーチ", spring: "湧水",
+  place_of_worship: "神社・寺院", peak: "山", beach: "ビーチ", spring: "湧水", waterfall: "滝",
+  nature_reserve: "自然保護区", climbing: "クライミング施設", golf_course: "ゴルフ場",
+  nightclub: "ナイトクラブ", escape_game: "謎解き・脱出ゲーム",
+  variety_store: "雑貨店", gift: "ギフトショップ",
 };
 
 /* ---------- 設定管理 (SettingsManager → localStorage / 読み替え表#6) ---------- */
@@ -716,20 +720,27 @@ function randomDestinationPoint() {
   // 地球面の近似計算 (緯度1度 ≈ 111km、経度は緯度補正)
   const dLat = (distance * Math.cos(rad)) / 111.0;
   const dLng = (distance * Math.sin(rad)) / (111.0 * Math.cos(state.origin.lat * Math.PI / 180));
-  return { lat: state.origin.lat + dLat, lng: state.origin.lng + dLng };
+  return { lat: state.origin.lat + dLat, lng: state.origin.lng + dLng, medianKm: median };
 }
 
-function buildOverpassQuery(center, filters) {
-  const around = `(around:2000,${center.lat.toFixed(6)},${center.lng.toFixed(6)})`;
-  const body = filters.map((f) => `${f}["name"]${around};`).join("\n");
-  return `[out:json][timeout:15];\n(\n${body}\n);\nout center 60;`;
+/* 検索半径: 中央値距離が大きい(=ばらつきが大きい)条件ほど広く取る。
+   1000m〜4000mの範囲でクリップ (改善案#1) */
+function searchRadiusMeters(medianKm) {
+  return Math.round(Math.max(1000, Math.min(4000, medianKm * 1000 * 0.4)));
 }
 
-async function overpassSearch(center, filters) {
+function buildOverpassQuery(center, filters, radiusM) {
+  const around = `(around:${radiusM},${center.lat.toFixed(6)},${center.lng.toFixed(6)})`;
+  // name または brand のいずれかのタグを持つ地物を対象にする（改善案#2: name必須を緩和）
+  const body = filters.map((f) => `${f}${around}[~"^(name|brand)$"~".",i];`).join("\n");
+  return `[out:json][timeout:15];\n(\n${body}\n);\nout center 80;`;
+}
+
+async function overpassSearch(center, filters, radiusM) {
   const res = await fetch("https://overpass-api.de/api/interpreter", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: "data=" + encodeURIComponent(buildOverpassQuery(center, filters)),
+    body: "data=" + encodeURIComponent(buildOverpassQuery(center, filters, radiusM)),
   });
   if (!res.ok) throw new Error("overpass");
   const data = await res.json();
@@ -737,8 +748,9 @@ async function overpassSearch(center, filters) {
     .map((el) => {
       const lat = el.lat ?? el.center?.lat;
       const lng = el.lon ?? el.center?.lon;
-      if (lat == null || lng == null || !el.tags?.name) return null;
-      return { id: `${el.type}/${el.id}`, name: el.tags.name, lat, lng, tags: el.tags };
+      const name = el.tags?.name || el.tags?.brand;
+      if (lat == null || lng == null || !name) return null;
+      return { id: `${el.type}/${el.id}`, name, lat, lng, tags: el.tags };
     })
     .filter(Boolean);
 }
@@ -761,10 +773,11 @@ async function executeRoulette() {
     // 目的地点を別乱数で再計算しながら最大5回リトライ (§6.5)
     for (let attempt = 0; attempt < 5 && candidates.length === 0; attempt++) {
       const dest = randomDestinationPoint();
-      candidates = await overpassSearch(dest, subFilters);
+      const radiusM = searchRadiusMeters(dest.medianKm);
+      candidates = await overpassSearch(dest, subFilters, radiusM);
       // 検索クエリの緩和: サブジャンル→大ジャンル (§6.6)
       if (candidates.length === 0 && state.subGenre !== "omakase") {
-        candidates = await overpassSearch(dest, omakaseFilters);
+        candidates = await overpassSearch(dest, omakaseFilters, radiusM);
       }
     }
 
