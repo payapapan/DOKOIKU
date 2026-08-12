@@ -614,33 +614,33 @@ const GENRES = {
   food: {
     label: "食事",
     sub: {
-      omakase: { label: "おまかせ", filters: ['nwr["amenity"~"^(restaurant|cafe|fast_food|bar|pub|ice_cream|biergarten|food_court)$"]'] },
-      cafe:    { label: "カフェ",   filters: ['nwr["amenity"="cafe"]', 'nwr["cuisine"~"coffee_shop"]'] },
-      lunch:   { label: "ランチ",   filters: ['nwr["amenity"~"^(restaurant|fast_food|food_court)$"]'] },
-      dinner:  { label: "ディナー", filters: ['nwr["amenity"="restaurant"]', 'nwr["amenity"="biergarten"]', 'nwr["cuisine"~"izakaya"]'] },
-      sweets:  { label: "スイーツ", filters: ['nwr["shop"~"^(confectionery|bakery|pastry|chocolate)$"]', 'nwr["amenity"="ice_cream"]', 'nwr["cuisine"~"cake"]'] },
-      bar:     { label: "居酒屋・バー", filters: ['nwr["amenity"~"^(bar|pub|biergarten)$"]', 'nwr["cuisine"~"izakaya"]'] },
+      omakase: { label: "おまかせ", filters: ['nw["amenity"~"^(restaurant|cafe|fast_food|bar|pub|ice_cream|biergarten|food_court)$"]'] },
+      cafe:    { label: "カフェ",   filters: ['nw["amenity"="cafe"]', 'nw["cuisine"~"coffee_shop"]'] },
+      lunch:   { label: "ランチ",   filters: ['nw["amenity"~"^(restaurant|fast_food|food_court)$"]'] },
+      dinner:  { label: "ディナー", filters: ['nw["amenity"="restaurant"]', 'nw["amenity"="biergarten"]', 'nw["cuisine"~"izakaya"]'] },
+      sweets:  { label: "スイーツ", filters: ['nw["shop"~"^(confectionery|bakery|pastry|chocolate)$"]', 'nw["amenity"="ice_cream"]', 'nw["cuisine"~"cake"]'] },
+      bar:     { label: "居酒屋・バー", filters: ['nw["amenity"~"^(bar|pub|biergarten)$"]', 'nw["cuisine"~"izakaya"]'] },
     },
   },
   play: {
     label: "遊び",
     sub: {
-      omakase:  { label: "おまかせ", filters: ['nwr["shop"~"^(mall|department_store)$"]', 'nwr["amenity"~"^(cinema|theatre|nightclub)$"]', 'nwr["leisure"~"^(park|sports_centre|bowling_alley|amusement_arcade|escape_game|golf_course)$"]', 'nwr["amenity"="library"]'] },
-      shopping: { label: "ショッピング", filters: ['nwr["shop"~"^(mall|department_store|variety_store|gift)$"]'] },
-      entertainment: { label: "エンタメ", filters: ['nwr["amenity"~"^(cinema|theatre|nightclub)$"]', 'nwr["leisure"~"^(amusement_arcade|escape_game)$"]'] },
-      activity: { label: "アクティビティ", filters: ['nwr["leisure"~"^(sports_centre|bowling_alley|fitness_centre|ice_rink|climbing|golf_course)$"]'] },
-      park:     { label: "公園", filters: ['nwr["leisure"~"^(park|nature_reserve)$"]'] },
-      culture:  { label: "文化", filters: ['nwr["amenity"~"^(library|arts_centre|community_centre)$"]', 'nwr["tourism"="gallery"]'] },
+      omakase:  { label: "おまかせ", filters: ['nw["shop"~"^(mall|department_store)$"]', 'nw["amenity"~"^(cinema|theatre|nightclub)$"]', 'nw["leisure"~"^(park|sports_centre|bowling_alley|amusement_arcade|escape_game|golf_course)$"]', 'nw["amenity"="library"]'] },
+      shopping: { label: "ショッピング", filters: ['nw["shop"~"^(mall|department_store|variety_store|gift)$"]'] },
+      entertainment: { label: "エンタメ", filters: ['nw["amenity"~"^(cinema|theatre|nightclub)$"]', 'nw["leisure"~"^(amusement_arcade|escape_game)$"]'] },
+      activity: { label: "アクティビティ", filters: ['nw["leisure"~"^(sports_centre|bowling_alley|fitness_centre|ice_rink|climbing|golf_course)$"]'] },
+      park:     { label: "公園", filters: ['nw["leisure"~"^(park|nature_reserve)$"]'] },
+      culture:  { label: "文化", filters: ['nw["amenity"~"^(library|arts_centre|community_centre)$"]', 'nw["tourism"="gallery"]'] },
     },
   },
   sightseeing: {
     label: "観光",
     sub: {
-      omakase: { label: "おまかせ", filters: ['nwr["tourism"~"^(attraction|museum|gallery|zoo|aquarium|viewpoint|theme_park)$"]', 'nwr["historic"]', 'nwr["leisure"="garden"]'] },
-      nature:  { label: "自然", filters: ['nwr["leisure"~"^(garden|nature_reserve)$"]', 'nwr["tourism"="viewpoint"]', 'nwr["natural"~"^(peak|beach|spring|waterfall)$"]'] },
-      history: { label: "歴史", filters: ['nwr["historic"]', 'nwr["amenity"="place_of_worship"]'] },
-      museum:  { label: "美術館・博物館", filters: ['nwr["tourism"~"^(museum|gallery)$"]'] },
-      zoo:     { label: "動物園・水族館", filters: ['nwr["tourism"~"^(zoo|aquarium|theme_park)$"]'] },
+      omakase: { label: "おまかせ", filters: ['nw["tourism"~"^(attraction|museum|gallery|zoo|aquarium|viewpoint|theme_park)$"]', 'nw["historic"]', 'nw["leisure"="garden"]'] },
+      nature:  { label: "自然", filters: ['nw["leisure"~"^(garden|nature_reserve)$"]', 'nw["tourism"="viewpoint"]', 'nw["natural"~"^(peak|beach|spring|waterfall)$"]'] },
+      history: { label: "歴史", filters: ['nw["historic"]', 'nw["amenity"="place_of_worship"]'] },
+      museum:  { label: "美術館・博物館", filters: ['nw["tourism"~"^(museum|gallery)$"]'] },
+      zoo:     { label: "動物園・水族館", filters: ['nw["tourism"~"^(zoo|aquarium|theme_park)$"]'] },
     },
   },
 };
@@ -964,13 +964,16 @@ function buildOverpassQuery(center, filters, radiusM) {
   const around = `(around:${radiusM},${center.lat.toFixed(6)},${center.lng.toFixed(6)})`;
   // name/brandの絞り込みはクエリ側では行わない(重いaroundの実行回数を増やすだけで、
   // 結果はどのみちoverpassSearch内のクライアント側フィルタで絞られるため冗長だった)
+  // relationは対象外(nw)。out centerでの中心算出が重く、広域の公園等でタイムアウト要因になるため。
+  // timeoutを10秒に設定: こちらが通信を打ち切ってもサーバーは自身のtimeoutまで処理を続けるため、
+  // 短く設定することでサーバー側の処理枠を早く解放させ、次の試行が待たされるのを防ぐ。
   const body = filters.map((f) => `${f}${around};`).join("\n");
-  return `[out:json][timeout:15];\n(\n${body}\n);\nout center 80;`;
+  return `[out:json][timeout:10];\n(\n${body}\n);\nout center 60;`;
 }
 
 async function overpassSearch(center, filters, radiusM, endpoint) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 16000); // サーバー側15秒設定+マージン
+  const timeoutId = setTimeout(() => controller.abort(), 12000); // サーバー側10秒設定+マージン
   let res;
   try {
     res = await fetch(endpoint, {
@@ -1014,7 +1017,17 @@ async function executeRoulette() {
     const anchors = await loadAnchors();
 
     // 目的地点を別乱数で再計算しながら最大5回リトライ (§6.5)
+    // 全体で40秒を超えたら打ち切る(失敗が続いた際に延々と待たせないため)
+    const SEARCH_BUDGET_MS = 40000;
     for (let attempt = 0; attempt < 5 && candidates.length === 0; attempt++) {
+      if (attempt > 0) {
+        if (Date.now() - startedAt > SEARCH_BUDGET_MS) {
+          logDebug(`  時間上限(${SEARCH_BUDGET_MS / 1000}秒)に達したため打ち切り`);
+          break;
+        }
+        // サーバーへの連続アクセスを緩和するため、試行の間に短い間隔を空ける
+        await new Promise((r) => setTimeout(r, 600));
+      }
       const dest = randomDestinationPoint();
       const radiusM = searchRadiusMeters(dest.medianKm);
       logDebug(`[試行${attempt + 1}/5] 理想地点=(${dest.lat.toFixed(5)},${dest.lng.toFixed(5)}) 中央値距離=${dest.medianKm.toFixed(2)}km 検索半径=${radiusM}m`);
@@ -1050,7 +1063,7 @@ async function executeRoulette() {
           logDebug(`  大ジャンル緩和検索[${endpointHost}]: ${candidates.length}件 (${Date.now() - t1}ms)`);
         }
       } catch (err) {
-        const reason = err && err.name === "AbortError" ? "タイムアウト(16秒)" : (err && err.message) || "不明なエラー";
+        const reason = err && err.name === "AbortError" ? "タイムアウト(12秒)" : (err && err.message) || "不明なエラー";
         logDebug(`  検索失敗[${endpointHost}]: ${reason}`);
         candidates = [];
       }
