@@ -962,8 +962,10 @@ const OVERPASS_ENDPOINTS = [
 
 function buildOverpassQuery(center, filters, radiusM) {
   const around = `(around:${radiusM},${center.lat.toFixed(6)},${center.lng.toFixed(6)})`;
-  // name または brand のいずれかのタグを持つ地物を対象にする（改善案#2: name必須を緩和）
-  const body = filters.map((f) => `${f}${around}[~"^(name|brand)$"~".",i];`).join("\n");
+  // name/brandそれぞれ個別の索引検索にする(改善案#2改訂: 正規表現によるタグキー走査は重いため廃止)
+  const body = filters
+    .flatMap((f) => [`${f}${around}["name"];`, `${f}${around}["brand"];`])
+    .join("\n");
   return `[out:json][timeout:15];\n(\n${body}\n);\nout center 80;`;
 }
 
