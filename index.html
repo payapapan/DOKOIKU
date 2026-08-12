@@ -965,15 +965,14 @@ function buildOverpassQuery(center, filters, radiusM) {
   // name/brandの絞り込みはクエリ側では行わない(重いaroundの実行回数を増やすだけで、
   // 結果はどのみちoverpassSearch内のクライアント側フィルタで絞られるため冗長だった)
   // relationは対象外(nw)。out centerでの中心算出が重く、広域の公園等でタイムアウト要因になるため。
-  // timeoutを10秒に設定: こちらが通信を打ち切ってもサーバーは自身のtimeoutまで処理を続けるため、
-  // 短く設定することでサーバー側の処理枠を早く解放させ、次の試行が待たされるのを防ぐ。
+  // 各条件は必ずタグ絞り込みとセットにする(タグなしのaroundは範囲内の全地物を拾い極端に重くなる)。
   const body = filters.map((f) => `${f}${around};`).join("\n");
-  return `[out:json][timeout:10];\n(\n${body}\n);\nout center 60;`;
+  return `[out:json][timeout:14];\n(\n${body}\n);\nout center 60;`;
 }
 
 async function overpassSearch(center, filters, radiusM, endpoint) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12000); // サーバー側10秒設定+マージン
+  const timeoutId = setTimeout(() => controller.abort(), 16000); // サーバー側14秒設定+マージン
   let res;
   try {
     res = await fetch(endpoint, {
@@ -1063,7 +1062,7 @@ async function executeRoulette() {
           logDebug(`  大ジャンル緩和検索[${endpointHost}]: ${candidates.length}件 (${Date.now() - t1}ms)`);
         }
       } catch (err) {
-        const reason = err && err.name === "AbortError" ? "タイムアウト(12秒)" : (err && err.message) || "不明なエラー";
+        const reason = err && err.name === "AbortError" ? "タイムアウト(16秒)" : (err && err.message) || "不明なエラー";
         logDebug(`  検索失敗[${endpointHost}]: ${reason}`);
         candidates = [];
       }
