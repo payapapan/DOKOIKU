@@ -951,6 +951,15 @@ function findNearestAnchor(center, radiusM, anchors) {
   return nearest;
 }
 
+/* Overpassの公開ミラーサーバー(公式Wikiに掲載の全世界対応インスタンス)。
+   1回のルーレット実行内で、リトライのたびに順番に切り替えることで、
+   同一サーバーへの連続アクセスによるレート制限/過負荷を避ける。 */
+const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+];
+
 function buildOverpassQuery(center, filters, radiusM) {
   const around = `(around:${radiusM},${center.lat.toFixed(6)},${center.lng.toFixed(6)})`;
   // name または brand のいずれかのタグを持つ地物を対象にする（改善案#2: name必須を緩和）
@@ -958,12 +967,12 @@ function buildOverpassQuery(center, filters, radiusM) {
   return `[out:json][timeout:15];\n(\n${body}\n);\nout center 80;`;
 }
 
-async function overpassSearch(center, filters, radiusM) {
+async function overpassSearch(center, filters, radiusM, endpoint) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 16000); // サーバー側15秒設定+マージン
   let res;
   try {
-    res = await fetch("https://overpass-api.de/api/interpreter", {
+    res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: "data=" + encodeURIComponent(buildOverpassQuery(center, filters, radiusM)),
@@ -972,7 +981,7 @@ async function overpassSearch(center, filters, radiusM) {
   } finally {
     clearTimeout(timeoutId);
   }
-  if (!res.ok) throw new Error("overpass");
+  if (!res.ok) throw new Error(`overpass HTTP ${res.status}`);
   const data = await res.json();
   return (data.elements || [])
     .map((el) => {
@@ -1024,20 +1033,24 @@ async function executeRoulette() {
         }
       }
 
+      // ミラーサーバーを試行ごとに切り替え、同一サーバーへの連続アクセスを避ける
+      const endpoint = OVERPASS_ENDPOINTS[attempt % OVERPASS_ENDPOINTS.length];
+      const endpointHost = endpoint.replace(/^https?:\/\//, "").split("/")[0];
+
       // 1回の試行が失敗(タイムアウト等)しても、ループ全体を落とさず次のリトライに進む
       try {
         const t0 = Date.now();
-        candidates = await overpassSearch(center, subFilters, effectiveRadiusM);
-        logDebug(`  サブジャンル検索: ${candidates.length}件 (${Date.now() - t0}ms)`);
+        candidates = await overpassSearch(center, subFilters, effectiveRadiusM, endpoint);
+        logDebug(`  サブジャンル検索[${endpointHost}]: ${candidates.length}件 (${Date.now() - t0}ms)`);
         // 検索クエリの緩和: サブジャンル→大ジャンル (§6.6)
         if (candidates.length === 0 && state.subGenre !== "omakase") {
           const t1 = Date.now();
-          candidates = await overpassSearch(center, omakaseFilters, effectiveRadiusM);
-          logDebug(`  大ジャンル緩和検索: ${candidates.length}件 (${Date.now() - t1}ms)`);
+          candidates = await overpassSearch(center, omakaseFilters, effectiveRadiusM, endpoint);
+          logDebug(`  大ジャンル緩和検索[${endpointHost}]: ${candidates.length}件 (${Date.now() - t1}ms)`);
         }
       } catch (err) {
-        const reason = err && err.name === "AbortError" ? "タイムアウト" : (err && err.message) || "不明なエラー";
-        logDebug(`  検索失敗: ${reason}`);
+        const reason = err && err.name === "AbortError" ? "タイムアウト(16秒)" : (err && err.message) || "不明なエラー";
+        logDebug(`  検索失敗[${endpointHost}]: ${reason}`);
         candidates = [];
       }
     }
