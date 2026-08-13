@@ -482,6 +482,7 @@ button { font-family: inherit; border: none; cursor: pointer; }
     <!-- ジャンル -->
     <div class="section">
       <div class="section-title">ジャンル</div>
+      <div class="section-subtitle">複数選択可（試行ごとにランダムに1つ使用）</div>
       <div class="section-body" id="genre-options"></div>
     </div>
 
@@ -674,7 +675,7 @@ const Settings = {
     try {
       localStorage.setItem(this.KEY, JSON.stringify({
         transport: state.transport, time: state.time, directions: state.directions,
-        genre: state.genre, subGenre: state.subGenre, mapApp: state.mapApp,
+        genres: state.genres, subGenre: state.subGenre, mapApp: state.mapApp,
       }));
     } catch { /* プライベートブラウズ等では保存しない */ }
   },
@@ -687,7 +688,7 @@ const state = {
   transport: saved.transport || "walk",
   time: saved.time || 30,
   directions: Array.isArray(saved.directions) ? saved.directions : [],
-  genre: saved.genre || null,
+  genres: Array.isArray(saved.genres) ? saved.genres : [],
   subGenre: saved.subGenre || "omakase",
   mapApp: saved.mapApp || "apple",
   origin: null,                      // {lat, lng, label}
@@ -698,8 +699,8 @@ const state = {
 };
 if (!TRANSPORT[state.transport]) state.transport = "walk";
 if (!TIME_STEPS.includes(state.time)) state.time = 30;
-if (state.genre && !GENRES[state.genre]) state.genre = null;
-if (state.genre && !GENRES[state.genre].sub[state.subGenre]) state.subGenre = "omakase";
+state.genres = state.genres.filter((g) => GENRES[g]);
+if (state.genres.length === 1 && !GENRES[state.genres[0]].sub[state.subGenre]) state.subGenre = "omakase";
 if (!MAP_APPS[state.mapApp]) state.mapApp = "apple";
 
 /* ---------- DOM構築ヘルパー ---------- */
@@ -740,15 +741,25 @@ function renderAll() {
     dirEl.appendChild(btn);
   }
 
-  renderOptionGroup("genre-options", GENRES, state.genre, (key) => {
-    if (state.genre !== key) { state.genre = key; state.subGenre = "omakase"; }
-    persistAndRender();
-  });
+  const genreEl = $("genre-options");
+  genreEl.innerHTML = "";
+  for (const [key, g] of Object.entries(GENRES)) {
+    const btn = document.createElement("button");
+    btn.className = "option-btn pressable" + (state.genres.includes(key) ? " selected" : "");
+    btn.innerHTML = `<span>${g.label}</span>${CHECK_SVG}`;
+    btn.addEventListener("click", () => {
+      const i = state.genres.indexOf(key);
+      if (i >= 0) state.genres.splice(i, 1); else state.genres.push(key);
+      if (state.genres.length === 1) state.subGenre = "omakase";
+      persistAndRender();
+    });
+    genreEl.appendChild(btn);
+  }
 
   const subSection = $("subgenre-section");
-  if (state.genre) {
+  if (state.genres.length === 1) {
     subSection.style.display = "";
-    renderOptionGroup("subgenre-options", GENRES[state.genre].sub, state.subGenre, (key) => {
+    renderOptionGroup("subgenre-options", GENRES[state.genres[0]].sub, state.subGenre, (key) => {
       state.subGenre = key;
       persistAndRender();
     });
@@ -763,7 +774,7 @@ function renderAll() {
     persistAndRender();
   });
 
-  $("btn-roulette").disabled = !(state.genre && state.origin);
+  $("btn-roulette").disabled = !(state.genres.length > 0 && state.origin);
 }
 
 function persistAndRender() {
@@ -1020,12 +1031,10 @@ async function executeRoulette() {
   $("loading").classList.add("visible");
   const startedAt = Date.now();
 
-  logDebug(`=== ルーレット開始 ジャンル=${state.genre}/${state.subGenre} 移動手段=${state.transport} 時間=${state.time}分 方角=[${state.directions.join(",") || "指定なし"}] 出発地=(${state.origin.lat.toFixed(5)},${state.origin.lng.toFixed(5)})`);
+  const genreLabel = state.genres.length === 1 ? `${state.genres[0]}/${state.subGenre}` : state.genres.join("+") + "(各omakase・試行ごとにランダム選択)";
+  logDebug(`=== ルーレット開始 ジャンル=${genreLabel} 移動手段=${state.transport} 時間=${state.time}分 方角=[${state.directions.join(",") || "指定なし"}] 出発地=(${state.origin.lat.toFixed(5)},${state.origin.lng.toFixed(5)})`);
 
   try {
-    const genre = GENRES[state.genre];
-    const subFilters = genre.sub[state.subGenre].filters;
-    const omakaseFilters = genre.sub.omakase.filters;
     let candidates = [];
     const anchors = await loadAnchors();
     // ミラーの開始位置をランダム化(毎回同じサーバーから始まると、そのサーバーだけ
@@ -1057,7 +1066,16 @@ async function executeRoulette() {
       // (4000m→6000m→8000m)。中央値距離の40%が元々上限未満の条件には影響しない。
       const radiusCapM = attempt < 2 ? 4000 : attempt === 2 ? 6000 : 8000;
       const radiusM = searchRadiusMeters(dest.medianKm, radiusCapM);
-      logDebug(`[試行${attempt + 1}/5] 理想地点=(${dest.lat.toFixed(5)},${dest.lng.toFixed(5)}) 中央値距離=${dest.medianKm.toFixed(2)}km 検索半径=${radiusM}m(上限${radiusCapM}m)`);
+
+      // ジャンルを試行ごとに決定: 複数選択時はランダムに1つ選び、そのomakaseで検索する
+      // (複数ジャンルの条件を1クエリにまとめるとOverpass側の負荷が増すため避ける)
+      const genreKey = state.genres[Math.floor(Math.random() * state.genres.length)];
+      const genre = GENRES[genreKey];
+      const useSubGenre = state.genres.length === 1 && state.subGenre !== "omakase";
+      const subFilters = useSubGenre ? genre.sub[state.subGenre].filters : genre.sub.omakase.filters;
+      const omakaseFilters = genre.sub.omakase.filters;
+
+      logDebug(`[試行${attempt + 1}/5] ジャンル=${genreKey}${useSubGenre ? "/" + state.subGenre : "(omakase)"} 理想地点=(${dest.lat.toFixed(5)},${dest.lng.toFixed(5)}) 中央値距離=${dest.medianKm.toFixed(2)}km 検索半径=${radiusM}m(上限${radiusCapM}m)`);
 
       // 拠点スナップ: 理想の目的地点付近に駅・役所があれば、そこを検索中心に採用する
       let center = dest;
@@ -1084,7 +1102,7 @@ async function executeRoulette() {
         candidates = await overpassSearch(center, subFilters, effectiveRadiusM, endpoint);
         logDebug(`  サブジャンル検索[${endpointHost}]: ${candidates.length}件 (${Date.now() - t0}ms)`);
         // 検索クエリの緩和: サブジャンル→大ジャンル (§6.6)
-        if (candidates.length === 0 && state.subGenre !== "omakase") {
+        if (candidates.length === 0 && useSubGenre) {
           const t1 = Date.now();
           candidates = await overpassSearch(center, omakaseFilters, effectiveRadiusM, endpoint);
           logDebug(`  大ジャンル緩和検索[${endpointHost}]: ${candidates.length}件 (${Date.now() - t1}ms)`);
