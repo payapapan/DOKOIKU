@@ -891,9 +891,10 @@ function randomDestinationPoint() {
 }
 
 /* 検索半径: 中央値距離が大きい(=ばらつきが大きい)条件ほど広く取る。
-   1000m〜4000mの範囲でクリップ (改善案#1) */
-function searchRadiusMeters(medianKm) {
-  return Math.round(Math.max(1000, Math.min(4000, medianKm * 1000 * 0.4)));
+   1000m〜capMの範囲でクリップ (改善案#1)。
+   capMはリトライ回数に応じて呼び出し側が段階的に緩める(密度の低いジャンルの救済策)。 */
+function searchRadiusMeters(medianKm, capM = 4000) {
+  return Math.round(Math.max(1000, Math.min(capM, medianKm * 1000 * 0.4)));
 }
 
 /* 拠点スナップ: 理想の目的地点から一定距離以内に拠点(駅・市区町村役場)があれば、
@@ -971,8 +972,19 @@ function buildOverpassQuery(center, filters, radiusM) {
   return `[out:json][timeout:14];\n(\n${body}\n);\nout center 60;`;
 }
 
+// ページがバックグラウンドになった際に進行中の通信を即座に中断するため、
+// アクティブなAbortControllerを追跡する(iOS Safariはバックグラウンド中
+// setTimeoutの発火を大幅に遅延させるため、素直に待つと数十秒〜数分宙に浮く)
+const activeControllers = new Set();
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    for (const c of activeControllers) c.abort();
+  }
+});
+
 async function overpassSearch(center, filters, radiusM, endpoint) {
   const controller = new AbortController();
+  activeControllers.add(controller);
   const timeoutId = setTimeout(() => controller.abort(), 16000); // サーバー側14秒設定+マージン
   let res;
   try {
@@ -984,6 +996,7 @@ async function overpassSearch(center, filters, radiusM, endpoint) {
     });
   } finally {
     clearTimeout(timeoutId);
+    activeControllers.delete(controller);
   }
   if (!res.ok) throw new Error(`overpass HTTP ${res.status}`);
   const data = await res.json();
@@ -1023,6 +1036,10 @@ async function executeRoulette() {
     // 全体で40秒を超えたら打ち切る(失敗が続いた際に延々と待たせないため)
     const SEARCH_BUDGET_MS = 40000;
     for (let attempt = 0; attempt < 5 && candidates.length === 0; attempt++) {
+      if (document.hidden) {
+        logDebug(`  ページが非表示のため打ち切り`);
+        break;
+      }
       if (attempt > 0) {
         if (Date.now() - startedAt > SEARCH_BUDGET_MS) {
           logDebug(`  時間上限(${SEARCH_BUDGET_MS / 1000}秒)に達したため打ち切り`);
@@ -1030,10 +1047,17 @@ async function executeRoulette() {
         }
         // サーバーへの連続アクセスを緩和するため、試行の間に短い間隔を空ける
         await new Promise((r) => setTimeout(r, 600));
+        if (document.hidden) {
+          logDebug(`  ページが非表示のため打ち切り`);
+          break;
+        }
       }
       const dest = randomDestinationPoint();
-      const radiusM = searchRadiusMeters(dest.medianKm);
-      logDebug(`[試行${attempt + 1}/5] 理想地点=(${dest.lat.toFixed(5)},${dest.lng.toFixed(5)}) 中央値距離=${dest.medianKm.toFixed(2)}km 検索半径=${radiusM}m`);
+      // 1〜2回目は上限4000mのまま。3回目以降は密度の低いジャンル救済のため上限だけを緩める
+      // (4000m→6000m→8000m)。中央値距離の40%が元々上限未満の条件には影響しない。
+      const radiusCapM = attempt < 2 ? 4000 : attempt === 2 ? 6000 : 8000;
+      const radiusM = searchRadiusMeters(dest.medianKm, radiusCapM);
+      logDebug(`[試行${attempt + 1}/5] 理想地点=(${dest.lat.toFixed(5)},${dest.lng.toFixed(5)}) 中央値距離=${dest.medianKm.toFixed(2)}km 検索半径=${radiusM}m(上限${radiusCapM}m)`);
 
       // 拠点スナップ: 理想の目的地点付近に駅・役所があれば、そこを検索中心に採用する
       let center = dest;
@@ -1066,7 +1090,9 @@ async function executeRoulette() {
           logDebug(`  大ジャンル緩和検索[${endpointHost}]: ${candidates.length}件 (${Date.now() - t1}ms)`);
         }
       } catch (err) {
-        const reason = err && err.name === "AbortError" ? "タイムアウト(16秒)" : (err && err.message) || "不明なエラー";
+        const reason = err && err.name === "AbortError"
+          ? (document.hidden ? "中断(バックグラウンドのため)" : "タイムアウト(16秒)")
+          : (err && err.message) || "不明なエラー";
         logDebug(`  検索失敗[${endpointHost}]: ${reason}`);
         candidates = [];
       }
