@@ -627,22 +627,37 @@ const GENRES = {
   play: {
     label: "遊び",
     sub: {
-      omakase:  { label: "おまかせ", filters: ['nw["shop"~"^(mall|department_store)$"]', 'nw["amenity"~"^(cinema|theatre|nightclub)$"]', 'nw["leisure"~"^(park|sports_centre|bowling_alley|amusement_arcade|escape_game|golf_course)$"]', 'nw["amenity"="library"]'] },
-      shopping: { label: "ショッピング", filters: ['nw["shop"~"^(mall|department_store|variety_store|gift)$"]'] },
-      entertainment: { label: "エンタメ", filters: ['nw["amenity"~"^(cinema|theatre|nightclub)$"]', 'nw["leisure"~"^(amusement_arcade|escape_game)$"]'] },
-      activity: { label: "アクティビティ", filters: ['nw["leisure"~"^(sports_centre|bowling_alley|fitness_centre|ice_rink|climbing|golf_course)$"]'] },
+      omakase:  { label: "おまかせ", filters: ['nw["shop"~"^(mall|department_store|convenience|supermarket)$"]', 'nw["amenity"~"^(cinema|theatre|nightclub|casino)$"]', 'nw["leisure"~"^(park|sports_centre|bowling_alley|amusement_arcade|escape_game|golf_course|water_park|swimming_pool)$"]', 'nw["amenity"="library"]'] },
+      shopping: { label: "ショッピング", filters: ['nw["shop"~"^(mall|department_store|variety_store|gift|convenience|supermarket|books|clothes|shoes|pet|toys|music|second_hand|outdoor|sports|electronics|doityourself|florist|hairdresser)$"]'] },
+      entertainment: { label: "エンタメ", filters: ['nw["amenity"~"^(cinema|theatre|nightclub|casino)$"]', 'nw["leisure"~"^(amusement_arcade|escape_game)$"]'] },
+      activity: { label: "アクティビティ", filters: ['nw["leisure"~"^(sports_centre|bowling_alley|fitness_centre|ice_rink|climbing|golf_course|water_park|swimming_pool|stadium|pitch|playground|dog_park|marina)$"]'] },
       park:     { label: "公園", filters: ['nw["leisure"~"^(park|nature_reserve)$"]'] },
-      culture:  { label: "文化", filters: ['nw["amenity"~"^(library|arts_centre|community_centre)$"]', 'nw["tourism"="gallery"]'] },
+      culture:  { label: "文化", filters: ['nw["amenity"~"^(library|arts_centre|community_centre|fountain|marketplace|planetarium|events_venue|public_bath)$"]', 'nw["tourism"="gallery"]'] },
     },
   },
   sightseeing: {
     label: "観光",
     sub: {
-      omakase: { label: "おまかせ", filters: ['nw["tourism"~"^(attraction|museum|gallery|zoo|aquarium|viewpoint|theme_park)$"]', 'nw["historic"~"^(castle|castle_wall|monument|memorial|archaeological_site|ruins|city_gate|tomb)$"]', 'nw["leisure"="garden"]'] },
-      nature:  { label: "自然", filters: ['nw["leisure"~"^(garden|nature_reserve)$"]', 'nw["tourism"="viewpoint"]', 'nw["natural"~"^(peak|beach|spring|waterfall)$"]'] },
-      history: { label: "歴史", filters: ['nw["historic"~"^(castle|castle_wall|monument|memorial|archaeological_site|ruins|city_gate|tomb)$"]', 'nw["amenity"="place_of_worship"]'] },
+      omakase: { label: "おまかせ", filters: ['nw["tourism"~"^(attraction|museum|gallery|zoo|aquarium|viewpoint|theme_park)$"]', 'nw["historic"~"^(castle|castle_wall|monument|memorial|archaeological_site|ruins|city_gate|tomb|fort|manor|wayside_shrine|wayside_cross)$"]', 'nw["leisure"="garden"]', 'nw["natural"="hot_spring"]'] },
+      nature:  { label: "自然", filters: ['nw["leisure"~"^(garden|nature_reserve)$"]', 'nw["tourism"="viewpoint"]', 'nw["natural"~"^(peak|beach|spring|waterfall|wood|cave_entrance|hot_spring)$"]'] },
+      history: { label: "歴史", filters: ['nw["historic"~"^(castle|castle_wall|monument|memorial|archaeological_site|ruins|city_gate|tomb|fort|manor|wayside_shrine|wayside_cross)$"]', 'nw["amenity"="place_of_worship"]'] },
       museum:  { label: "美術館・博物館", filters: ['nw["tourism"~"^(museum|gallery)$"]'] },
       zoo:     { label: "動物園・水族館", filters: ['nw["tourism"~"^(zoo|aquarium|theme_park)$"]'] },
+    },
+  },
+  accommodation: {
+    label: "宿泊",
+    sub: {
+      omakase: { label: "おまかせ", filters: ['nw["tourism"~"^(hotel|guest_house|motel|hostel|camp_site)$"]'] },
+      hotel: { label: "ホテル", filters: ['nw["tourism"~"^(hotel|motel)$"]'] },
+      guest_house: { label: "ゲストハウス・民宿", filters: ['nw["tourism"~"^(guest_house|hostel)$"]'] },
+      camp_site: { label: "キャンプ場", filters: ['nw["tourism"="camp_site"]'] },
+    },
+  },
+  rest: {
+    label: "休憩",
+    sub: {
+      omakase: { label: "おまかせ", filters: ['nw["highway"~"^(services|rest_area)$"]', 'nw["tourism"="information"]'] },
     },
   },
 };
@@ -663,6 +678,18 @@ const TAG_LABELS = {
   nature_reserve: "自然保護区", climbing: "クライミング施設", golf_course: "ゴルフ場",
   nightclub: "ナイトクラブ", escape_game: "謎解き・脱出ゲーム",
   variety_store: "雑貨店", gift: "ギフトショップ",
+  convenience: "コンビニ", supermarket: "スーパー", books: "書店", clothes: "衣料品店",
+  shoes: "靴店", pet: "ペットショップ", toys: "おもちゃ店", music: "レコード店",
+  second_hand: "リサイクルショップ", outdoor: "アウトドア用品店", sports: "スポーツ用品店",
+  electronics: "家電量販店", doityourself: "ホームセンター", florist: "花屋", hairdresser: "美容室",
+  water_park: "ウォーターパーク", swimming_pool: "プール", stadium: "スタジアム", pitch: "運動場",
+  playground: "遊び場", dog_park: "ドッグラン", marina: "マリーナ",
+  fountain: "噴水", marketplace: "市場", planetarium: "プラネタリウム",
+  events_venue: "イベント会場", public_bath: "銭湯", casino: "カジノ",
+  wood: "森", cave_entrance: "洞窟", hot_spring: "温泉",
+  fort: "砦", manor: "邸宅", wayside_shrine: "祠", wayside_cross: "道標の十字架",
+  hotel: "ホテル", guest_house: "ゲストハウス", motel: "モーテル", hostel: "ホステル",
+  camp_site: "キャンプ場", services: "道の駅・SA/PA", rest_area: "休憩所", information: "案内所",
 };
 
 /* ---------- 設定管理 (SettingsManager → localStorage / 読み替え表#6) ---------- */
@@ -1170,7 +1197,7 @@ function haversineKm(a, b) {
 }
 
 function categoryLabel(tags) {
-  for (const key of ["amenity", "shop", "leisure", "tourism", "historic", "natural"]) {
+  for (const key of ["amenity", "shop", "leisure", "tourism", "historic", "natural", "highway"]) {
     if (tags[key] && TAG_LABELS[tags[key]]) return TAG_LABELS[tags[key]];
     if (key === "historic" && tags.historic) return "史跡";
   }
