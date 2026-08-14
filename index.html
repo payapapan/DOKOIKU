@@ -559,6 +559,7 @@ button { font-family: inherit; border: none; cursor: pointer; }
     <!-- エリア決定画面のボタン群 -->
     <div class="roulette-area">
       <button id="btn-search-facility" class="primary-btn pressable" disabled>施設を探す</button>
+      <button id="btn-open-maps-area" class="secondary-btn pressable" style="width:100%;margin-top:12px;">このままMapsで開く</button>
       <div class="button-row">
         <button id="btn-area-retry" class="secondary-btn pressable">もう一回</button>
         <button id="btn-area-home" class="secondary-btn pressable">ホームに戻る</button>
@@ -1394,14 +1395,22 @@ function goHome() {
 }
 
 /* Mapsで開く (MapLauncher相当 / 読み替え表#3) */
-function openMaps() {
-  const f = state.result;
-  if (!f) return;
+function buildMapsUrl(point) {
   const mode = TRANSPORT[state.transport].mapMode;
-  const url = state.mapApp === "google"
-    ? `https://www.google.com/maps/dir/?api=1&destination=${f.lat},${f.lng}&travelmode=${mode.google}`
-    : `https://maps.apple.com/?daddr=${f.lat},${f.lng}&dirflg=${mode.apple}`;
-  window.open(url, "_blank");
+  return state.mapApp === "google"
+    ? `https://www.google.com/maps/dir/?api=1&destination=${point.lat},${point.lng}&travelmode=${mode.google}`
+    : `https://maps.apple.com/?daddr=${point.lat},${point.lng}&dirflg=${mode.apple}`;
+}
+
+function openMaps() {
+  if (!state.result) return;
+  window.open(buildMapsUrl(state.result), "_blank");
+}
+
+/* エリア決定画面から、施設を特定せずそのまま行き先(拠点または理想地点)をMapsで開く */
+function openMapsForArea() {
+  if (!state.area) return;
+  window.open(buildMapsUrl(state.area), "_blank");
 }
 
 /* もう一回(結果画面): セッション内最大3回。まず候補プールから再抽選し、
@@ -1425,6 +1434,7 @@ $("btn-decide-area").addEventListener("click", decideArea);
 $("btn-area-retry").addEventListener("click", decideArea);
 $("btn-area-home").addEventListener("click", goHome);
 $("btn-search-facility").addEventListener("click", beginFacilitySearch);
+$("btn-open-maps-area").addEventListener("click", openMapsForArea);
 $("btn-open-maps").addEventListener("click", openMaps);
 $("btn-retry").addEventListener("click", retryFacility);
 $("btn-home").addEventListener("click", goHome);
