@@ -1132,18 +1132,31 @@ async function decideArea() {
   if (!state.origin) return;
   const anchors = await loadAnchors(); // 初期化時に先読み済みのため通常は即時解決
 
-  const dest = randomDestinationPoint();
-  let area = { lat: dest.lat, lng: dest.lng, medianKm: dest.medianKm, name: null, viaAnchor: false };
+  // 通信を伴わないステップ1では、拠点が見つかるまで複数回試すコストが小さい。
+  // 拠点(駅・役所・道の駅・IC/SA・PA)はほぼ確実に陸地にあるため、
+  // 「拠点に当たるまで粘る」ことが、理想地点だけを使った場合に起こり得る
+  // 「海上・山中など到達不能な地点に着地する」リスクを大きく下げる。
+  const MAX_TRIES = 8;
+  let area = null;
+  let lastDest = null;
 
-  if (anchors.length > 0) {
+  for (let i = 0; i < MAX_TRIES; i++) {
+    const dest = randomDestinationPoint();
+    lastDest = dest;
+    if (anchors.length === 0) break; // 拠点データ自体がなければ1回で確定(フォールバックのみ)
+
     const snapRadiusM = anchorSnapRadiusMeters(dest.medianKm);
     const anchor = findNearestAnchor(dest, snapRadiusM, anchors);
     if (anchor) {
       area = { lat: anchor.lat, lng: anchor.lng, medianKm: dest.medianKm, name: anchor.name, viaAnchor: true };
-      logDebug(`=== エリア決定: 拠点「${anchor.name}」(${anchor.lat},${anchor.lng}) 半径${snapRadiusM}m以内で発見`);
-    } else {
-      logDebug(`=== エリア決定: 半径${snapRadiusM}m以内に拠点なし → 理想地点をそのまま採用 (${dest.lat.toFixed(5)},${dest.lng.toFixed(5)})`);
+      logDebug(`=== エリア決定(試行${i + 1}/${MAX_TRIES}): 拠点「${anchor.name}」(${anchor.lat},${anchor.lng}) 半径${snapRadiusM}m以内で発見`);
+      break;
     }
+  }
+
+  if (!area) {
+    area = { lat: lastDest.lat, lng: lastDest.lng, medianKm: lastDest.medianKm, name: null, viaAnchor: false };
+    logDebug(`=== エリア決定: ${MAX_TRIES}回試しても拠点が見つからず、理想地点をそのまま採用 (${lastDest.lat.toFixed(5)},${lastDest.lng.toFixed(5)})`);
   }
 
   state.area = area;
