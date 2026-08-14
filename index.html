@@ -211,22 +211,43 @@ button { font-family: inherit; border: none; cursor: pointer; }
 .option-btn .check { display: none; width: 20px; height: 20px; }
 .option-btn.selected .check { display: block; }
 
-/* 方角: 2列グリッド 80px */
-.direction-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
-.direction-btn {
-  height: 80px;
+/* 方角: 円を4分割したコンパスUI (北=上, 東=右, 南=下, 西=左) */
+.direction-compass {
   display: flex;
-  flex-direction: column;
-  align-items: center;
   justify-content: center;
-  gap: 8px;
-  border-radius: 8px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  font-size: 14px;
+  margin-top: 16px;
 }
-.direction-btn svg { width: 28px; height: 28px; }
-.direction-btn.selected { background: var(--accent); color: #fff; }
+#direction-svg {
+  width: 220px;
+  height: 220px;
+  max-width: 100%;
+  touch-action: manipulation;
+}
+.direction-wedge {
+  fill: var(--bg-secondary);
+  stroke: var(--bg-primary);
+  stroke-width: 3;
+  cursor: pointer;
+  transition: fill 0.15s ease-in-out;
+}
+.direction-wedge.selected { fill: var(--accent); }
+.direction-wedge:active { opacity: 0.8; }
+.direction-label {
+  fill: var(--text-primary);
+  font-size: 20px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+  transition: fill 0.15s ease-in-out;
+}
+.direction-label.selected { fill: #fff; }
+.direction-center {
+  fill: var(--bg-primary);
+  stroke: var(--separator);
+  stroke-width: 1;
+  pointer-events: none;
+}
 
 /* Primary Button: 56px / r12 */
 .primary-btn {
@@ -374,7 +395,10 @@ button { font-family: inherit; border: none; cursor: pointer; }
   overflow: hidden;
   background: var(--bg-tertiary);
 }
-#map { width: 100%; height: 100%; }
+#map, #area-map { width: 100%; height: 100%; }
+
+/* 汎用2列ボタン行(エリア決定画面等で使用) */
+.button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
 
 /* 結果画面ボタン */
 .result-buttons { margin: 24px 20px 0; display: flex; flex-direction: column; gap: 12px; }
@@ -476,20 +500,9 @@ button { font-family: inherit; border: none; cursor: pointer; }
     <div class="section">
       <div class="section-title">方角</div>
       <div class="section-subtitle">複数選択可（選択しない場合は全方位）</div>
-      <div class="direction-grid" id="direction-options"></div>
-    </div>
-
-    <!-- ジャンル -->
-    <div class="section">
-      <div class="section-title">ジャンル</div>
-      <div class="section-subtitle">複数選択可（試行ごとにランダムに1つ使用）</div>
-      <div class="section-body" id="genre-options"></div>
-    </div>
-
-    <!-- 詳細ジャンル -->
-    <div class="section" id="subgenre-section" style="display:none">
-      <div class="section-title">詳細ジャンル</div>
-      <div class="section-body" id="subgenre-options"></div>
+      <div class="direction-compass">
+        <svg id="direction-svg" viewBox="0 0 200 200"></svg>
+      </div>
     </div>
 
     <!-- 地図アプリ -->
@@ -510,9 +523,46 @@ button { font-family: inherit; border: none; cursor: pointer; }
       </div>
     </div>
 
-    <!-- ルーレットボタン -->
+    <!-- 行き先を決めるボタン -->
     <div class="roulette-area">
-      <button id="btn-roulette" class="primary-btn pressable" disabled>ルーレット実行</button>
+      <button id="btn-decide-area" class="primary-btn pressable" disabled>行き先を決める</button>
+    </div>
+  </div>
+
+  <!-- ============ エリア決定画面 ============ -->
+  <div id="area-screen" class="screen">
+    <div class="result-header">
+      <svg fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+      <h2>行き先が決まりました</h2>
+    </div>
+
+    <div class="facility-name" id="area-name"></div>
+    <div class="facility-sub" id="area-distance"></div>
+
+    <div class="map-preview">
+      <div id="area-map"></div>
+    </div>
+
+    <!-- ジャンル -->
+    <div class="section">
+      <div class="section-title">ジャンル</div>
+      <div class="section-subtitle">複数選択可（試行ごとにランダムに1つ使用）</div>
+      <div class="section-body" id="genre-options"></div>
+    </div>
+
+    <!-- 詳細ジャンル -->
+    <div class="section" id="subgenre-section" style="display:none">
+      <div class="section-title">詳細ジャンル</div>
+      <div class="section-body" id="subgenre-options"></div>
+    </div>
+
+    <!-- エリア決定画面のボタン群 -->
+    <div class="roulette-area">
+      <button id="btn-search-facility" class="primary-btn pressable" disabled>施設を探す</button>
+      <div class="button-row">
+        <button id="btn-area-retry" class="secondary-btn pressable">もう一回</button>
+        <button id="btn-area-home" class="secondary-btn pressable">ホームに戻る</button>
+      </div>
     </div>
   </div>
 
@@ -605,10 +655,10 @@ const TIME_STEPS = [];
 for (let m = 15; m <= 120; m += 15) TIME_STEPS.push(m);
 for (let m = 150; m <= 300; m += 30) TIME_STEPS.push(m);
 const DIRECTIONS = {
-  north: { label: "北", deg: 0,   icon: "M5 10l7-7m0 0l7 7m-7-7v18" },
-  east:  { label: "東", deg: 90,  icon: "M14 5l7 7m0 0l-7 7m7-7H3" },
-  south: { label: "南", deg: 180, icon: "M19 14l-7 7m0 0l-7-7m7 7V3" },
-  west:  { label: "西", deg: 270, icon: "M10 19l-7-7m0 0l7-7m-7 7h18" },
+  north: { label: "北", deg: 0 },
+  east:  { label: "東", deg: 90 },
+  south: { label: "南", deg: 180 },
+  west:  { label: "西", deg: 270 },
 };
 
 /* 詳細ジャンル → OSMタグ (POICategoryMapperのWeb版 / 読み替え表#2) */
@@ -719,6 +769,7 @@ const state = {
   subGenre: saved.subGenre || "omakase",
   mapApp: saved.mapApp || "apple",
   origin: null,                      // {lat, lng, label}
+  area: null,                        // {lat, lng, medianKm, name, viaAnchor} ステップ1で決定した検索中心
   result: null,                      // 現在の抽選結果
   excludedIds: new Set(),            // 再抽選での除外リスト (セッション内のみ)
   retryCount: 0,                     // 「もう一回」は最大3回
@@ -746,6 +797,43 @@ function renderOptionGroup(containerId, items, selectedKey, onSelect) {
   }
 }
 
+/* 方角コンパス描画: 円をDIRECTIONSの中心角(deg)±45°で4分割したウェッジを生成する。
+   bearing(北=0°・東=90°・時計回り)からSVG座標への変換は
+   randomDestinationPointの方角計算と同じ考え方(北=上)。 */
+function renderDirectionCompass() {
+  const svg = $("direction-svg");
+  const cx = 100, cy = 100, R = 95, half = 45, labelR = 60;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const pt = (bearingDeg, r) => {
+    const rad = toRad(bearingDeg);
+    return [cx + r * Math.sin(rad), cy - r * Math.cos(rad)];
+  };
+
+  let html = "";
+  for (const [key, d] of Object.entries(DIRECTIONS)) {
+    const [x1, y1] = pt(d.deg - half, R);
+    const [x2, y2] = pt(d.deg + half, R);
+    const selected = state.directions.includes(key) ? " selected" : "";
+    html += `<path class="direction-wedge${selected}" data-key="${key}" d="M ${cx},${cy} L ${x1.toFixed(2)},${y1.toFixed(2)} A ${R},${R} 0 0,1 ${x2.toFixed(2)},${y2.toFixed(2)} Z"></path>`;
+  }
+  html += `<circle class="direction-center" cx="${cx}" cy="${cy}" r="10"></circle>`;
+  for (const [key, d] of Object.entries(DIRECTIONS)) {
+    const [lx, ly] = pt(d.deg, labelR);
+    const selected = state.directions.includes(key) ? " selected" : "";
+    html += `<text class="direction-label${selected}" x="${lx.toFixed(2)}" y="${ly.toFixed(2)}">${d.label}</text>`;
+  }
+  svg.innerHTML = html;
+}
+
+$("direction-svg").addEventListener("click", (e) => {
+  const wedge = e.target.closest("[data-key]");
+  if (!wedge) return;
+  const key = wedge.dataset.key;
+  const i = state.directions.indexOf(key);
+  if (i >= 0) state.directions.splice(i, 1); else state.directions.push(key);
+  persistAndRender();
+});
+
 function renderAll() {
   renderOptionGroup("transport-options", TRANSPORT, state.transport, (key) => {
     state.transport = key;
@@ -754,19 +842,7 @@ function renderAll() {
 
   renderTimeSlider();
 
-  const dirEl = $("direction-options");
-  dirEl.innerHTML = "";
-  for (const [key, d] of Object.entries(DIRECTIONS)) {
-    const btn = document.createElement("button");
-    btn.className = "direction-btn pressable" + (state.directions.includes(key) ? " selected" : "");
-    btn.innerHTML = `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="${d.icon}"/></svg><span>${d.label}</span>`;
-    btn.addEventListener("click", () => {
-      const i = state.directions.indexOf(key);
-      if (i >= 0) state.directions.splice(i, 1); else state.directions.push(key);
-      persistAndRender();
-    });
-    dirEl.appendChild(btn);
-  }
+  renderDirectionCompass();
 
   const genreEl = $("genre-options");
   genreEl.innerHTML = "";
@@ -801,7 +877,8 @@ function renderAll() {
     persistAndRender();
   });
 
-  $("btn-roulette").disabled = !(state.genres.length > 0 && state.origin);
+  $("btn-decide-area").disabled = !state.origin;
+  $("btn-search-facility").disabled = !(state.genres.length > 0);
 }
 
 function persistAndRender() {
@@ -1049,26 +1126,91 @@ async function overpassSearch(center, filters, radiusM, endpoint) {
     .filter(Boolean);
 }
 
-async function executeRoulette() {
-  if (state.phase === "loading") return;
-  state.phase = "loading";
+/* ---------- ステップ1: エリア決定(通信なし・即時) ---------- */
+async function decideArea() {
+  if (!state.origin) return;
+  const anchors = await loadAnchors(); // 初期化時に先読み済みのため通常は即時解決
+
+  const dest = randomDestinationPoint();
+  let area = { lat: dest.lat, lng: dest.lng, medianKm: dest.medianKm, name: null, viaAnchor: false };
+
+  if (anchors.length > 0) {
+    const snapRadiusM = anchorSnapRadiusMeters(dest.medianKm);
+    const anchor = findNearestAnchor(dest, snapRadiusM, anchors);
+    if (anchor) {
+      area = { lat: anchor.lat, lng: anchor.lng, medianKm: dest.medianKm, name: anchor.name, viaAnchor: true };
+      logDebug(`=== エリア決定: 拠点「${anchor.name}」(${anchor.lat},${anchor.lng}) 半径${snapRadiusM}m以内で発見`);
+    } else {
+      logDebug(`=== エリア決定: 半径${snapRadiusM}m以内に拠点なし → 理想地点をそのまま採用 (${dest.lat.toFixed(5)},${dest.lng.toFixed(5)})`);
+    }
+  }
+
+  state.area = area;
+  showAreaScreen();
+}
+
+let areaMap = null;
+let areaMapLayers = [];
+function renderAreaMap(center) {
+  if (!areaMap) {
+    areaMap = L.map("area-map");
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(areaMap);
+  }
+  areaMapLayers.forEach((l) => areaMap.removeLayer(l));
+  areaMapLayers = [
+    L.circleMarker([center.lat, center.lng], {
+      radius: 8, color: "#fff", weight: 2, fillColor: "#007AFF", fillOpacity: 1,
+    }).addTo(areaMap).bindPopup(center.name || "この付近"),
+    L.circleMarker([state.origin.lat, state.origin.lng], {
+      radius: 6, color: "#fff", weight: 2, fillColor: "#8e8e93", fillOpacity: 1,
+    }).addTo(areaMap).bindPopup("出発地点"),
+  ];
+  areaMap.fitBounds(L.latLngBounds([state.origin.lat, state.origin.lng], [center.lat, center.lng]).pad(0.25));
+  areaMap.invalidateSize();
+}
+
+function showAreaScreen() {
+  const distKm = haversineKm(state.origin, state.area);
+  const distLabel = distKm >= 1 ? `約${distKm.toFixed(1)}km` : `約${Math.round(distKm * 1000)}m`;
+  $("area-name").textContent = state.area.name ? `「${state.area.name}」周辺` : "この付近";
+  $("area-distance").textContent = `出発地点から${distLabel}`;
+
+  $("setting-screen").classList.remove("active");
+  $("result-screen").classList.remove("active");
+  $("area-screen").classList.add("active");
+  document.querySelector(".content").scrollTop = 0;
+  renderAll();
+  setTimeout(() => renderAreaMap(state.area), 100);
+}
+
+/* ---------- ステップ2: 施設探し(エリア固定でOverpass検索) ---------- */
+function beginFacilitySearch() {
   state.retryCount = 0;
   state.excludedIds = new Set();
   state.lastCandidates = null;
+  searchFacility();
+}
+
+async function searchFacility() {
+  if (state.phase === "loading" || !state.area) return;
+  state.phase = "loading";
   $("loading").classList.add("visible");
   const startedAt = Date.now();
 
   const genreLabel = state.genres.length === 1 ? `${state.genres[0]}/${state.subGenre}` : state.genres.join("+") + "(各omakase・試行ごとにランダム選択)";
-  logDebug(`=== ルーレット開始 ジャンル=${genreLabel} 移動手段=${state.transport} 時間=${state.time}分 方角=[${state.directions.join(",") || "指定なし"}] 出発地=(${state.origin.lat.toFixed(5)},${state.origin.lng.toFixed(5)})`);
+  logDebug(`=== 施設探し開始(エリア固定) ジャンル=${genreLabel} 中心=(${state.area.lat.toFixed(5)},${state.area.lng.toFixed(5)})${state.area.name ? ` 「${state.area.name}」` : ""}`);
 
   try {
     let candidates = [];
-    const anchors = await loadAnchors();
     // ミラーの開始位置をランダム化(毎回同じサーバーから始まると、そのサーバーだけ
     // 負荷が集中してレート制限にかかりやすくなるため)
     const mirrorStart = Math.floor(Math.random() * OVERPASS_ENDPOINTS.length);
 
-    // 目的地点を別乱数で再計算しながら最大5回リトライ (§6.5)
+    // エリア(中心点)は固定したまま、検索半径だけを段階的に広げて最大5回リトライ。
+    // 目的地点・拠点の再抽選はステップ1(エリア決定画面)でのみ行う。
     // 全体で40秒を超えたら打ち切る(失敗が続いた際に延々と待たせないため)
     const SEARCH_BUDGET_MS = 40000;
     for (let attempt = 0; attempt < 5 && candidates.length === 0; attempt++) {
@@ -1088,11 +1230,12 @@ async function executeRoulette() {
           break;
         }
       }
-      const dest = randomDestinationPoint();
       // 1〜2回目は上限4000mのまま。3回目以降は密度の低いジャンル救済のため上限だけを緩める
       // (4000m→6000m→8000m)。中央値距離の40%が元々上限未満の条件には影響しない。
       const radiusCapM = attempt < 2 ? 4000 : attempt === 2 ? 6000 : 8000;
-      const radiusM = searchRadiusMeters(dest.medianKm, radiusCapM);
+      const radiusM = searchRadiusMeters(state.area.medianKm, radiusCapM);
+      // エリアが拠点スナップ由来なら、施設密度が高い前提で半径を縮小する(従来通り)
+      const effectiveRadiusM = state.area.viaAnchor ? Math.max(500, Math.round(radiusM * 0.6)) : radiusM;
 
       // ジャンルを試行ごとに決定: 複数選択時はランダムに1つ選び、そのomakaseで検索する
       // (複数ジャンルの条件を1クエリにまとめるとOverpass側の負荷が増すため避ける)
@@ -1102,22 +1245,7 @@ async function executeRoulette() {
       const subFilters = useSubGenre ? genre.sub[state.subGenre].filters : genre.sub.omakase.filters;
       const omakaseFilters = genre.sub.omakase.filters;
 
-      logDebug(`[試行${attempt + 1}/5] ジャンル=${genreKey}${useSubGenre ? "/" + state.subGenre : "(omakase)"} 理想地点=(${dest.lat.toFixed(5)},${dest.lng.toFixed(5)}) 中央値距離=${dest.medianKm.toFixed(2)}km 検索半径=${radiusM}m(上限${radiusCapM}m)`);
-
-      // 拠点スナップ: 理想の目的地点付近に駅・役所があれば、そこを検索中心に採用する
-      let center = dest;
-      let effectiveRadiusM = radiusM;
-      if (anchors.length > 0) {
-        const snapRadiusM = anchorSnapRadiusMeters(dest.medianKm);
-        const anchor = findNearestAnchor(dest, snapRadiusM, anchors);
-        if (anchor) {
-          center = anchor;
-          effectiveRadiusM = Math.max(500, Math.round(radiusM * 0.6));
-          logDebug(`  拠点スナップ: 「${anchor.name}」(${anchor.lat},${anchor.lng}) 半径${snapRadiusM}m以内で発見 → 検索半径を${effectiveRadiusM}mに縮小`);
-        } else {
-          logDebug(`  拠点スナップ: 半径${snapRadiusM}m以内に拠点なし → 理想地点のまま検索`);
-        }
-      }
+      logDebug(`[試行${attempt + 1}/5] ジャンル=${genreKey}${useSubGenre ? "/" + state.subGenre : "(omakase)"} 検索半径=${effectiveRadiusM}m(上限${radiusCapM}m)`);
 
       // ミラーサーバーを試行ごとに切り替え、同一サーバーへの連続アクセスを避ける
       const endpoint = OVERPASS_ENDPOINTS[(mirrorStart + attempt) % OVERPASS_ENDPOINTS.length];
@@ -1126,12 +1254,12 @@ async function executeRoulette() {
       // 1回の試行が失敗(タイムアウト等)しても、ループ全体を落とさず次のリトライに進む
       try {
         const t0 = Date.now();
-        candidates = await overpassSearch(center, subFilters, effectiveRadiusM, endpoint);
+        candidates = await overpassSearch(state.area, subFilters, effectiveRadiusM, endpoint);
         logDebug(`  サブジャンル検索[${endpointHost}]: ${candidates.length}件 (${Date.now() - t0}ms)`);
         // 検索クエリの緩和: サブジャンル→大ジャンル (§6.6)
         if (candidates.length === 0 && useSubGenre) {
           const t1 = Date.now();
-          candidates = await overpassSearch(center, omakaseFilters, effectiveRadiusM, endpoint);
+          candidates = await overpassSearch(state.area, omakaseFilters, effectiveRadiusM, endpoint);
           logDebug(`  大ジャンル緩和検索[${endpointHost}]: ${candidates.length}件 (${Date.now() - t1}ms)`);
         }
       } catch (err) {
@@ -1141,6 +1269,9 @@ async function executeRoulette() {
         logDebug(`  検索失敗[${endpointHost}]: ${reason}`);
         candidates = [];
       }
+
+      // 同一セッション内で既に提示済みの施設は除外する(もう一回での重複防止)
+      candidates = candidates.filter((c) => !state.excludedIds.has(c.id));
     }
 
     // ローディング最低0.5秒表示
@@ -1150,7 +1281,7 @@ async function executeRoulette() {
     if (candidates.length === 0) {
       logDebug(`=== 5回全て失敗。候補なし (${Date.now() - startedAt}ms) ===`);
       failToIdle("条件に合う場所が\n見つかりませんでした",
-        "移動時間を長くする、方角の制限を解除する、別のジャンルを試す、などをお試しください。");
+        "ジャンルを変える、エリアを引き直す、などをお試しください。");
       return;
     }
 
@@ -1220,6 +1351,7 @@ function showResultScreen(facility) {
   $("result-address").textContent = addressLabel(facility.tags, distKm);
 
   $("setting-screen").classList.remove("active");
+  $("area-screen").classList.remove("active");
   $("result-screen").classList.add("active");
   document.querySelector(".content").scrollTop = 0;
 
@@ -1254,7 +1386,9 @@ function showResultScreen(facility) {
 function goHome() {
   state.phase = "idle";
   state.result = null;
+  state.area = null;
   $("result-screen").classList.remove("active");
+  $("area-screen").classList.remove("active");
   $("setting-screen").classList.add("active");
   document.querySelector(".content").scrollTop = 0;
 }
@@ -1270,31 +1404,29 @@ function openMaps() {
   window.open(url, "_blank");
 }
 
-/* もう一回: セッション内最大3回、同施設は除外 (§4.3) */
-function retryRoulette() {
+/* もう一回(結果画面): セッション内最大3回。まず候補プールから再抽選し、
+   プールが尽きたら同一エリア(state.area)のまま施設探しをやり直す (§4.3) */
+function retryFacility() {
   if (state.retryCount >= 3) {
-    showAlert("再抽選は3回までです", "条件を変えてみますか？");
+    showAlert("再抽選は3回までです", "エリアを変えてみますか？");
     return;
   }
   state.retryCount++;
-  $("result-screen").classList.remove("active");
-  $("setting-screen").classList.add("active");
-  state.phase = "loading";
-  $("loading").classList.add("visible");
-  setTimeout(() => {
-    const pool = (state.lastCandidates || []).filter((c) => !state.excludedIds.has(c.id));
-    if (pool.length === 0) {
-      failToIdle("これ以上の候補がありません", "条件を変えてみますか？");
-      goHome();
-      return;
-    }
+  const pool = (state.lastCandidates || []).filter((c) => !state.excludedIds.has(c.id));
+  if (pool.length > 0) {
     presentRandomPick();
-  }, 500);
+    return;
+  }
+  logDebug(`--- もう一回: 候補プールが尽きたため同一エリアで再検索 ---`);
+  searchFacility();
 }
 
-$("btn-roulette").addEventListener("click", executeRoulette);
+$("btn-decide-area").addEventListener("click", decideArea);
+$("btn-area-retry").addEventListener("click", decideArea);
+$("btn-area-home").addEventListener("click", goHome);
+$("btn-search-facility").addEventListener("click", beginFacilitySearch);
 $("btn-open-maps").addEventListener("click", openMaps);
-$("btn-retry").addEventListener("click", retryRoulette);
+$("btn-retry").addEventListener("click", retryFacility);
 $("btn-home").addEventListener("click", goHome);
 
 /* ---------- アラート / トースト ---------- */
