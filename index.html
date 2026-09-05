@@ -1,0 +1,1539 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>DOKOIKU - どこ行く？</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+/* ============================================================
+   DOKOIKU v6 Web — デザイントークン
+   実機Swift実装のスタイルを再現:
+   セクション間24px / 水平padding20px / 要素間12px
+   Primary 56px r12 / Secondary 48px r12 / Option 48px r8
+   方角グリッド 2列 80px / システムブルー
+   ============================================================ */
+:root {
+  --accent: #007AFF;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f2f2f7;
+  --bg-tertiary: #e5e5ea;
+  --text-primary: #000000;
+  --text-secondary: #8e8e93;
+  --text-tertiary: #c7c7cc;
+  --success: #34c759;
+  --warning: #ff9500;
+  --danger: #ff3b30;
+  --separator: rgba(60,60,67,0.15);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-primary: #000000;
+    --bg-secondary: #1c1c1e;
+    --bg-tertiary: #2c2c2e;
+    --text-primary: #ffffff;
+    --text-secondary: #8e8e93;
+    --text-tertiary: #48484a;
+    --separator: rgba(84,84,88,0.4);
+  }
+}
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Segoe UI", Roboto, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  max-width: 430px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- ナビゲーションバー ---------- */
+.navbar {
+  padding: calc(env(safe-area-inset-top, 0px) + 16px) 20px 12px;
+  background: var(--bg-primary);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 0.5px solid var(--separator);
+}
+.navbar h1 {
+  font-size: 28px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+/* ---------- コンテンツ ---------- */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+}
+.screen { display: none; }
+.screen.active { display: block; }
+
+/* ---------- セクション構造 (sectionViewパターン再現) ---------- */
+.section { padding: 0 20px; margin-top: 24px; }
+.section-title { font-size: 17px; font-weight: 600; margin-bottom: 4px; }
+.section-subtitle { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
+.section-body { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+
+/* ---------- ボタン共通 ---------- */
+button { font-family: inherit; border: none; cursor: pointer; }
+.pressable { transition: transform 0.1s ease-in-out, background-color 0.2s, color 0.2s; }
+.pressable:active { transform: scale(0.95); }
+
+/* デバッグログ */
+.debug-toggle {
+  width: 100%;
+  height: 36px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  border: 0.5px solid var(--separator);
+}
+.debug-panel { margin-top: 8px; }
+.debug-actions { display: flex; gap: 8px; margin-bottom: 8px; }
+.debug-actions .mini-btn { flex: 0 0 auto; }
+.debug-actions .secondary-btn { flex: 0 0 auto; height: 40px; padding: 0 14px; }
+.debug-log-text {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 10px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 240px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 移動時間スライダー */
+.time-slider-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+.time-slider-wrap { position: relative; }
+.time-slider {
+  width: 100%;
+  height: 32px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  margin-top: 8px;
+  position: relative;
+  z-index: 2;
+}
+.time-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-tertiary);
+}
+.time-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  margin-top: -12px;
+  opacity: 0; /* 見た目は独自描画のつまみに任せ、当たり判定のみ利用する */
+}
+.time-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-tertiary);
+}
+.time-slider::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  opacity: 0;
+}
+.time-slider-thumb {
+  position: absolute;
+  top: 24px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 1;
+}
+.time-slider-ticks {
+  position: relative;
+  height: 16px;
+  margin-top: 2px;
+}
+.time-slider-ticks span {
+  position: absolute;
+  top: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.time-slider-ticks span:first-child { transform: translateX(0); }
+.time-slider-ticks span:last-child { transform: translateX(-100%); }
+
+/* Option Button: 48px / r8 / 選択時ブルー+チェック */
+.option-btn {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 16px;
+  width: 100%;
+}
+.option-btn.selected { background: var(--accent); color: #fff; }
+.option-btn .check { display: none; width: 20px; height: 20px; }
+.option-btn.selected .check { display: block; }
+
+/* 方角: 円を4分割したコンパスUI (北=上, 東=右, 南=下, 西=左) */
+.direction-compass {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+#direction-svg {
+  width: 220px;
+  height: 220px;
+  max-width: 100%;
+  touch-action: manipulation;
+}
+.direction-wedge {
+  fill: var(--bg-secondary);
+  stroke: var(--bg-primary);
+  stroke-width: 3;
+  cursor: pointer;
+  transition: fill 0.15s ease-in-out;
+}
+.direction-wedge.selected { fill: var(--accent); }
+.direction-wedge:active { opacity: 0.8; }
+.direction-label {
+  fill: var(--text-primary);
+  font-size: 20px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+  transition: fill 0.15s ease-in-out;
+}
+.direction-label.selected { fill: #fff; }
+.direction-center {
+  fill: var(--bg-primary);
+  stroke: var(--separator);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+/* Primary Button: 56px / r12 */
+.primary-btn {
+  height: 56px;
+  width: 100%;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+}
+.primary-btn:disabled { background: #9e9ea4; cursor: default; }
+.primary-btn:disabled:active { transform: none; }
+
+/* Secondary Button: 48px / r12 */
+.secondary-btn {
+  height: 48px;
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* ルーレットボタンエリア (safeAreaInset底部固定を再現) */
+.roulette-area {
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-primary);
+  border-top: 0.5px solid var(--separator);
+  padding: 16px 20px calc(env(safe-area-inset-bottom, 0px) + 16px);
+  margin-top: 32px;
+}
+
+/* ---------- 現在地バー ---------- */
+.location-bar {
+  margin: 16px 20px 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.location-status { font-size: 13px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+.location-status.ok { color: var(--success); }
+.location-row { display: flex; gap: 8px; }
+.location-row input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  border: none;
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 15px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: inherit;
+}
+.location-row input:focus { outline: 2px solid var(--accent); }
+.mini-btn {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ---------- ローディング ---------- */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+}
+.loading-overlay.visible { display: flex; }
+.loading-card {
+  background: var(--bg-secondary);
+  padding: 32px;
+  border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.25);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+.loading-card svg { width: 48px; height: 48px; color: var(--accent); animation: rotate 1s linear infinite; }
+.loading-card p { font-size: 17px; font-weight: 600; }
+@keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* ---------- 結果画面: 5段階アニメーション ---------- */
+#result-screen .anim { opacity: 0; }
+@keyframes fadeSlideDown { from { opacity:0; transform: translateY(-20px); } to { opacity:1; transform: translateY(0); } }
+@keyframes scaleIn { from { opacity:0; transform: scale(0.8); } to { opacity:1; transform: scale(1); } }
+@keyframes slideInLeft { from { opacity:0; transform: translateX(-24px); } to { opacity:1; transform: translateX(0); } }
+@keyframes fadeSlideUp { from { opacity:0; transform: translateY(20px); } to { opacity:1; transform: translateY(0); } }
+@keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+.anim-header { animation: fadeSlideDown 0.3s ease-out forwards; }
+.anim-scale { animation: scaleIn 0.3s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+.anim-left { animation: slideInLeft 0.25s ease-out forwards; }
+.anim-up { animation: fadeSlideUp 0.3s ease-out forwards; }
+.anim-fade { animation: fadeIn 0.25s ease-out forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .anim-header, .anim-scale, .anim-left, .anim-up, .anim-fade { animation-duration: 0.01s; }
+  .loading-card svg { animation: pulse 1.2s ease-in-out infinite; }
+}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.result-header { text-align: center; padding-top: 32px; }
+.result-header svg { width: 64px; height: 64px; color: var(--success); margin: 0 auto; display: block; }
+.result-header h2 { font-size: 28px; font-weight: 700; margin-top: 8px; }
+.facility-name {
+  font-size: 24px;
+  font-weight: 700;
+  text-align: center;
+  padding: 0 20px;
+  margin-top: 24px;
+}
+.facility-sub { font-size: 13px; color: var(--text-secondary); text-align: center; margin-top: 4px; }
+
+/* 詳細情報カード */
+.detail-card {
+  margin: 24px 20px 0;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 16px;
+}
+.info-row { display: flex; align-items: flex-start; gap: 16px; }
+.info-row + .info-divider { height: 0.5px; background: var(--separator); margin: 16px 0; }
+.info-row svg { width: 24px; height: 24px; color: var(--accent); flex-shrink: 0; margin-top: 2px; }
+.info-row .info-label { font-size: 12px; color: var(--text-secondary); }
+.info-row .info-value { font-size: 16px; font-weight: 500; margin-top: 2px; }
+
+/* 地図プレビュー */
+.map-preview {
+  margin: 24px 20px 0;
+  height: 250px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--bg-tertiary);
+}
+#map, #area-map { width: 100%; height: 100%; }
+
+/* 汎用2列ボタン行(エリア決定画面等で使用) */
+.button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+
+/* 結果画面ボタン */
+.result-buttons { margin: 24px 20px 0; display: flex; flex-direction: column; gap: 12px; }
+.result-buttons .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* ---------- エラーアラート ---------- */
+.alert-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 600;
+  padding: 40px;
+}
+.alert-overlay.visible { display: flex; }
+.alert-card {
+  background: var(--bg-secondary);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 280px;
+  overflow: hidden;
+  text-align: center;
+}
+.alert-card .alert-body { padding: 20px 16px; }
+.alert-card h3 { font-size: 17px; font-weight: 600; }
+.alert-card p { font-size: 13px; margin-top: 6px; color: var(--text-primary); line-height: 1.5; white-space: pre-line; }
+.alert-card .alert-btn {
+  width: 100%;
+  height: 44px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 17px;
+  font-weight: 600;
+  border-top: 0.5px solid var(--separator);
+}
+
+/* トースト */
+.toast {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 32px);
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(0,0,0,0.8);
+  color: #fff;
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.3s;
+  z-index: 700;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- ナビゲーションバー -->
+<div class="navbar"><h1>DOKO🚶‍➡️KU</h1></div>
+
+<div class="content">
+
+  <!-- ============ 条件設定画面 ============ -->
+  <div id="setting-screen" class="screen active">
+
+    <!-- 現在地 -->
+    <div class="location-bar">
+      <div id="location-status" class="location-status">
+        <span id="location-status-text">出発地点を設定してください</span>
+      </div>
+      <div class="location-row">
+        <button id="btn-geolocate" class="mini-btn pressable">現在地を取得</button>
+        <input id="place-input" type="text" placeholder="または地名で検索" enterkeyhint="search">
+        <button id="btn-place-search" class="mini-btn pressable">検索</button>
+      </div>
+    </div>
+
+    <!-- 移動手段 -->
+    <div class="section">
+      <div class="section-title">移動手段</div>
+      <div class="section-body" id="transport-options"></div>
+    </div>
+
+    <!-- 移動時間 -->
+    <div class="section">
+      <div class="section-title">移動時間</div>
+      <div class="time-slider-value" id="time-value"></div>
+      <div class="time-slider-wrap">
+        <input type="range" id="time-slider" class="time-slider" min="0" step="1">
+        <div class="time-slider-thumb" id="time-thumb"></div>
+      </div>
+      <div class="time-slider-ticks" id="time-ticks"></div>
+    </div>
+
+    <!-- 方角 -->
+    <div class="section">
+      <div class="section-title">方角</div>
+      <div class="section-subtitle">複数選択可（選択しない場合は全方位）</div>
+      <div class="direction-compass">
+        <svg id="direction-svg" viewBox="0 0 200 200"></svg>
+      </div>
+    </div>
+
+    <!-- 地図アプリ -->
+    <div class="section">
+      <div class="section-title">地図アプリ</div>
+      <div class="section-body" id="mapapp-options"></div>
+    </div>
+
+    <!-- デバッグログ -->
+    <div class="section debug-section">
+      <button id="btn-toggle-debug" class="debug-toggle pressable">デバッグログ</button>
+      <div id="debug-panel" class="debug-panel" style="display:none">
+        <div class="debug-actions">
+          <button id="btn-copy-log" class="mini-btn pressable">コピー</button>
+          <button id="btn-clear-log" class="secondary-btn pressable">クリア</button>
+        </div>
+        <pre id="debug-log-text" class="debug-log-text"></pre>
+      </div>
+    </div>
+
+    <!-- 行き先を決めるボタン -->
+    <div class="roulette-area">
+      <button id="btn-decide-area" class="primary-btn pressable" disabled>行き先を決める</button>
+    </div>
+  </div>
+
+  <!-- ============ エリア決定画面 ============ -->
+  <div id="area-screen" class="screen">
+    <div class="result-header">
+      <svg fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+      <h2>行き先が決まりました</h2>
+    </div>
+
+    <div class="facility-name" id="area-name"></div>
+    <div class="facility-sub" id="area-distance"></div>
+
+    <div class="map-preview">
+      <div id="area-map"></div>
+    </div>
+
+    <!-- ジャンル -->
+    <div class="section">
+      <div class="section-title">ジャンル</div>
+      <div class="section-subtitle">複数選択可（試行ごとにランダムに1つ使用）</div>
+      <div class="section-body" id="genre-options"></div>
+    </div>
+
+    <!-- 詳細ジャンル -->
+    <div class="section" id="subgenre-section" style="display:none">
+      <div class="section-title">詳細ジャンル</div>
+      <div class="section-body" id="subgenre-options"></div>
+    </div>
+
+    <!-- エリア決定画面のボタン群 -->
+    <div class="roulette-area">
+      <button id="btn-search-facility" class="primary-btn pressable" disabled>施設を探す</button>
+      <button id="btn-open-maps-area" class="secondary-btn pressable" style="width:100%;margin-top:12px;">このままMapsで開く</button>
+      <div class="button-row">
+        <button id="btn-area-retry" class="secondary-btn pressable">もう一回</button>
+        <button id="btn-area-home" class="secondary-btn pressable">ホームに戻る</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 結果画面 ============ -->
+  <div id="result-screen" class="screen">
+    <div class="result-header anim" data-anim="anim-header" data-delay="100">
+      <svg fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+      <h2>見つかりました！</h2>
+    </div>
+
+    <div class="anim" data-anim="anim-scale" data-delay="200">
+      <div class="facility-name" id="result-name"></div>
+      <div class="facility-sub" id="result-category"></div>
+    </div>
+
+    <div class="detail-card anim" data-anim="anim-left" data-delay="350">
+      <div class="info-row">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <div>
+          <div class="info-label">移動時間（目安）</div>
+          <div class="info-value" id="result-time"></div>
+        </div>
+      </div>
+      <div class="info-divider"></div>
+      <div class="info-row">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <div>
+          <div class="info-label">場所</div>
+          <div class="info-value" id="result-address"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="map-preview anim" data-anim="anim-up" data-delay="450">
+      <div id="map"></div>
+    </div>
+
+    <div class="result-buttons anim" data-anim="anim-fade" data-delay="550">
+      <button id="btn-open-maps" class="primary-btn pressable">Mapsで開く</button>
+      <div class="row">
+        <button id="btn-retry" class="secondary-btn pressable">もう一回</button>
+        <button id="btn-home" class="secondary-btn pressable">ホームに戻る</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ローディング -->
+<div class="loading-overlay" id="loading">
+  <div class="loading-card">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+    <p>目的地を探しています...</p>
+  </div>
+</div>
+
+<!-- アラート -->
+<div class="alert-overlay" id="alert">
+  <div class="alert-card">
+    <div class="alert-body">
+      <h3 id="alert-title"></h3>
+      <p id="alert-message"></p>
+    </div>
+    <button class="alert-btn pressable" id="alert-ok">OK</button>
+  </div>
+</div>
+
+<!-- トースト -->
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ============================================================
+   DOKOIKU v6 Web — 実装
+   状態管理: RouletteState (idle/loading/result/error) を再現
+   検索: ランダムウォーク検索 (要件定義書 §6 準拠)
+   API: Overpass (POI) / Nominatim (地名) / Leaflet (地図)
+   ============================================================ */
+
+/* ---------- 定数 (Constants.swift相当) ---------- */
+const TRANSPORT = {
+  walk:    { label: "歩き",         speed: 4.0,  mapMode: { apple: "w", google: "walking" } },
+  bicycle: { label: "自転車",       speed: 15.0, mapMode: { apple: "w", google: "bicycling" } },
+  car:     { label: "車",           speed: 30.0, mapMode: { apple: "d", google: "driving" } },
+  transit: { label: "公共交通機関", speed: 25.0, mapMode: { apple: "r", google: "transit" } },
+};
+/* 移動時間スライダーの刻み値 (全移動手段共通、最大5時間):
+   0〜2時間: 15分刻み / 2〜5時間: 30分刻み */
+const TIME_STEPS = [];
+for (let m = 15; m <= 120; m += 15) TIME_STEPS.push(m);
+for (let m = 150; m <= 300; m += 30) TIME_STEPS.push(m);
+const DIRECTIONS = {
+  north: { label: "北", deg: 0 },
+  east:  { label: "東", deg: 90 },
+  south: { label: "南", deg: 180 },
+  west:  { label: "西", deg: 270 },
+};
+
+/* 詳細ジャンル → OSMタグ (POICategoryMapperのWeb版 / 読み替え表#2) */
+const GENRES = {
+  food: {
+    label: "食事",
+    sub: {
+      omakase: { label: "おまかせ", filters: ['nw["amenity"~"^(restaurant|cafe|fast_food|bar|pub|ice_cream|biergarten|food_court)$"]'] },
+      cafe:    { label: "カフェ",   filters: ['nw["amenity"="cafe"]', 'nw["cuisine"~"coffee_shop"]'] },
+      lunch:   { label: "ランチ",   filters: ['nw["amenity"~"^(restaurant|fast_food|food_court)$"]'] },
+      dinner:  { label: "ディナー", filters: ['nw["amenity"="restaurant"]', 'nw["amenity"="biergarten"]', 'nw["cuisine"~"izakaya"]'] },
+      sweets:  { label: "スイーツ", filters: ['nw["shop"~"^(confectionery|bakery|pastry|chocolate)$"]', 'nw["amenity"="ice_cream"]', 'nw["cuisine"~"cake"]'] },
+      bar:     { label: "居酒屋・バー", filters: ['nw["amenity"~"^(bar|pub|biergarten)$"]', 'nw["cuisine"~"izakaya"]'] },
+    },
+  },
+  play: {
+    label: "遊び",
+    sub: {
+      omakase:  { label: "おまかせ", filters: ['nw["shop"~"^(mall|department_store|convenience|supermarket)$"]', 'nw["amenity"~"^(cinema|theatre|nightclub|casino)$"]', 'nw["leisure"~"^(park|sports_centre|bowling_alley|amusement_arcade|escape_game|golf_course|water_park|swimming_pool)$"]', 'nw["amenity"="library"]'] },
+      shopping: { label: "ショッピング", filters: ['nw["shop"~"^(mall|department_store|variety_store|gift|convenience|supermarket|books|clothes|shoes|pet|toys|music|second_hand|outdoor|sports|electronics|doityourself)$"]'] },
+      entertainment: { label: "エンタメ", filters: ['nw["amenity"~"^(cinema|theatre|nightclub|casino)$"]', 'nw["leisure"~"^(amusement_arcade|escape_game)$"]'] },
+      activity: { label: "アクティビティ", filters: ['nw["leisure"~"^(sports_centre|bowling_alley|fitness_centre|ice_rink|climbing|golf_course|water_park|swimming_pool|stadium|playground|dog_park|marina)$"]'] },
+      park:     { label: "公園", filters: ['nw["leisure"~"^(park|nature_reserve)$"]'] },
+      culture:  { label: "文化", filters: ['nw["amenity"~"^(library|arts_centre|community_centre|marketplace|planetarium|events_venue|public_bath)$"]', 'nw["tourism"="gallery"]'] },
+    },
+  },
+  sightseeing: {
+    label: "観光",
+    sub: {
+      omakase: { label: "おまかせ", filters: ['nw["tourism"~"^(attraction|museum|gallery|zoo|aquarium|viewpoint|theme_park)$"]', 'nw["historic"~"^(castle|castle_wall|monument|memorial|archaeological_site|ruins|city_gate|tomb|fort|manor)$"]', 'nw["leisure"="garden"]', 'nw["natural"="hot_spring"]'] },
+      nature:  { label: "自然", filters: ['nw["leisure"~"^(garden|nature_reserve)$"]', 'nw["tourism"="viewpoint"]', 'nw["natural"~"^(peak|beach|spring|waterfall|cave_entrance|hot_spring)$"]'] },
+      history: { label: "歴史", filters: ['nw["historic"~"^(castle|castle_wall|monument|memorial|archaeological_site|ruins|city_gate|tomb|fort|manor)$"]', 'nw["amenity"="place_of_worship"]'] },
+      museum:  { label: "美術館・博物館", filters: ['nw["tourism"~"^(museum|gallery)$"]'] },
+      zoo:     { label: "動物園・水族館", filters: ['nw["tourism"~"^(zoo|aquarium|theme_park)$"]'] },
+    },
+  },
+  accommodation: {
+    label: "宿泊",
+    sub: {
+      omakase: { label: "おまかせ", filters: ['nw["tourism"~"^(hotel|guest_house|motel|hostel|camp_site)$"]'] },
+      hotel: { label: "ホテル", filters: ['nw["tourism"~"^(hotel|motel)$"]'] },
+      guest_house: { label: "ゲストハウス・民宿", filters: ['nw["tourism"~"^(guest_house|hostel)$"]'] },
+      camp_site: { label: "キャンプ場", filters: ['nw["tourism"="camp_site"]'] },
+    },
+  },
+  rest: {
+    label: "休憩",
+    sub: {
+      omakase: { label: "おまかせ", filters: ['nw["highway"~"^(services|rest_area)$"]', 'nw["tourism"="information"]'] },
+    },
+  },
+};
+const MAP_APPS = { apple: "Apple Maps", google: "Google Maps" };
+
+/* カテゴリ表示名 (結果画面のサブ表示用) */
+const TAG_LABELS = {
+  restaurant: "レストラン", cafe: "カフェ", fast_food: "ファストフード", bar: "バー", pub: "パブ",
+  ice_cream: "アイスクリーム", confectionery: "菓子店", bakery: "ベーカリー", pastry: "洋菓子店",
+  chocolate: "チョコレート店", biergarten: "ビアガーデン", food_court: "フードコート",
+  mall: "ショッピングモール", department_store: "百貨店", cinema: "映画館", theatre: "劇場",
+  amusement_arcade: "ゲームセンター", sports_centre: "スポーツ施設", bowling_alley: "ボウリング場",
+  fitness_centre: "フィットネス", ice_rink: "スケートリンク", park: "公園", garden: "庭園",
+  library: "図書館", arts_centre: "アートセンター", community_centre: "文化センター",
+  museum: "博物館・美術館", gallery: "ギャラリー", zoo: "動物園", aquarium: "水族館",
+  theme_park: "テーマパーク", viewpoint: "展望スポット", attraction: "観光名所",
+  place_of_worship: "神社・寺院", peak: "山", beach: "ビーチ", spring: "湧水", waterfall: "滝",
+  nature_reserve: "自然保護区", climbing: "クライミング施設", golf_course: "ゴルフ場",
+  nightclub: "ナイトクラブ", escape_game: "謎解き・脱出ゲーム",
+  variety_store: "雑貨店", gift: "ギフトショップ",
+  convenience: "コンビニ", supermarket: "スーパー", books: "書店", clothes: "衣料品店",
+  shoes: "靴店", pet: "ペットショップ", toys: "おもちゃ店", music: "レコード店",
+  second_hand: "リサイクルショップ", outdoor: "アウトドア用品店", sports: "スポーツ用品店",
+  electronics: "家電量販店", doityourself: "ホームセンター",
+  water_park: "ウォーターパーク", swimming_pool: "プール", stadium: "スタジアム",
+  playground: "遊び場", dog_park: "ドッグラン", marina: "マリーナ",
+  marketplace: "市場", planetarium: "プラネタリウム",
+  events_venue: "イベント会場", public_bath: "銭湯", casino: "カジノ",
+  cave_entrance: "洞窟", hot_spring: "温泉",
+  fort: "砦", manor: "邸宅",
+  hotel: "ホテル", guest_house: "ゲストハウス", motel: "モーテル", hostel: "ホステル",
+  camp_site: "キャンプ場", services: "道の駅・SA/PA", rest_area: "休憩所", information: "案内所",
+};
+
+/* ---------- 設定管理 (SettingsManager → localStorage / 読み替え表#6) ---------- */
+const Settings = {
+  KEY: "dokoiku_settings_v1",
+  load() {
+    try { return JSON.parse(localStorage.getItem(this.KEY)) || {}; } catch { return {}; }
+  },
+  save(state) {
+    try {
+      localStorage.setItem(this.KEY, JSON.stringify({
+        transport: state.transport, time: state.time, directions: state.directions,
+        genres: state.genres, subGenre: state.subGenre, mapApp: state.mapApp,
+      }));
+    } catch { /* プライベートブラウズ等では保存しない */ }
+  },
+};
+
+/* ---------- 状態 (RouletteViewModel相当 / 読み替え表#7) ---------- */
+const saved = Settings.load();
+const state = {
+  phase: "idle",                     // idle | loading | result | error
+  transport: saved.transport || "walk",
+  time: saved.time || 30,
+  directions: Array.isArray(saved.directions) ? saved.directions : [],
+  genres: Array.isArray(saved.genres) ? saved.genres : [],
+  subGenre: saved.subGenre || "omakase",
+  mapApp: saved.mapApp || "apple",
+  origin: null,                      // {lat, lng, label}
+  area: null,                        // {lat, lng, medianKm, name, viaAnchor} ステップ1で決定した検索中心
+  result: null,                      // 現在の抽選結果
+  excludedIds: new Set(),            // 再抽選での除外リスト (セッション内のみ)
+  retryCount: 0,                     // 「もう一回」は最大3回
+  lastCandidates: null,              // 直近の検索候補 (再抽選の高速化)
+};
+if (!TRANSPORT[state.transport]) state.transport = "walk";
+if (!TIME_STEPS.includes(state.time)) state.time = 30;
+state.genres = state.genres.filter((g) => GENRES[g]);
+if (state.genres.length === 1 && !GENRES[state.genres[0]].sub[state.subGenre]) state.subGenre = "omakase";
+if (!MAP_APPS[state.mapApp]) state.mapApp = "apple";
+
+/* ---------- DOM構築ヘルパー ---------- */
+const $ = (id) => document.getElementById(id);
+const CHECK_SVG = '<svg class="check" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>';
+
+function renderOptionGroup(containerId, items, selectedKey, onSelect) {
+  const el = $(containerId);
+  el.innerHTML = "";
+  for (const [key, item] of Object.entries(items)) {
+    const btn = document.createElement("button");
+    btn.className = "option-btn pressable" + (key === selectedKey ? " selected" : "");
+    btn.innerHTML = `<span>${item.label ?? item}</span>${CHECK_SVG}`;
+    btn.addEventListener("click", () => onSelect(key));
+    el.appendChild(btn);
+  }
+}
+
+/* 方角コンパス描画: 円をDIRECTIONSの中心角(deg)±45°で4分割したウェッジを生成する。
+   bearing(北=0°・東=90°・時計回り)からSVG座標への変換は
+   randomDestinationPointの方角計算と同じ考え方(北=上)。 */
+function renderDirectionCompass() {
+  const svg = $("direction-svg");
+  const cx = 100, cy = 100, R = 95, half = 45, labelR = 60;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const pt = (bearingDeg, r) => {
+    const rad = toRad(bearingDeg);
+    return [cx + r * Math.sin(rad), cy - r * Math.cos(rad)];
+  };
+
+  let html = "";
+  for (const [key, d] of Object.entries(DIRECTIONS)) {
+    const [x1, y1] = pt(d.deg - half, R);
+    const [x2, y2] = pt(d.deg + half, R);
+    const selected = state.directions.includes(key) ? " selected" : "";
+    html += `<path class="direction-wedge${selected}" data-key="${key}" d="M ${cx},${cy} L ${x1.toFixed(2)},${y1.toFixed(2)} A ${R},${R} 0 0,1 ${x2.toFixed(2)},${y2.toFixed(2)} Z"></path>`;
+  }
+  html += `<circle class="direction-center" cx="${cx}" cy="${cy}" r="10"></circle>`;
+  for (const [key, d] of Object.entries(DIRECTIONS)) {
+    const [lx, ly] = pt(d.deg, labelR);
+    const selected = state.directions.includes(key) ? " selected" : "";
+    html += `<text class="direction-label${selected}" x="${lx.toFixed(2)}" y="${ly.toFixed(2)}">${d.label}</text>`;
+  }
+  svg.innerHTML = html;
+}
+
+$("direction-svg").addEventListener("click", (e) => {
+  const wedge = e.target.closest("[data-key]");
+  if (!wedge) return;
+  const key = wedge.dataset.key;
+  const i = state.directions.indexOf(key);
+  if (i >= 0) state.directions.splice(i, 1); else state.directions.push(key);
+  persistAndRender();
+});
+
+function renderAll() {
+  renderOptionGroup("transport-options", TRANSPORT, state.transport, (key) => {
+    state.transport = key;
+    persistAndRender();
+  });
+
+  renderTimeSlider();
+
+  renderDirectionCompass();
+
+  const genreEl = $("genre-options");
+  genreEl.innerHTML = "";
+  for (const [key, g] of Object.entries(GENRES)) {
+    const btn = document.createElement("button");
+    btn.className = "option-btn pressable" + (state.genres.includes(key) ? " selected" : "");
+    btn.innerHTML = `<span>${g.label}</span>${CHECK_SVG}`;
+    btn.addEventListener("click", () => {
+      const i = state.genres.indexOf(key);
+      if (i >= 0) state.genres.splice(i, 1); else state.genres.push(key);
+      if (state.genres.length === 1) state.subGenre = "omakase";
+      persistAndRender();
+    });
+    genreEl.appendChild(btn);
+  }
+
+  const subSection = $("subgenre-section");
+  if (state.genres.length === 1) {
+    subSection.style.display = "";
+    renderOptionGroup("subgenre-options", GENRES[state.genres[0]].sub, state.subGenre, (key) => {
+      state.subGenre = key;
+      persistAndRender();
+    });
+  } else {
+    subSection.style.display = "none";
+  }
+
+  const mapItems = {};
+  for (const [k, v] of Object.entries(MAP_APPS)) mapItems[k] = { label: v };
+  renderOptionGroup("mapapp-options", mapItems, state.mapApp, (key) => {
+    state.mapApp = key;
+    persistAndRender();
+  });
+
+  $("btn-decide-area").disabled = !state.origin;
+  $("btn-search-facility").disabled = !(state.genres.length > 0);
+}
+
+function persistAndRender() {
+  Settings.save(state);
+  renderAll();
+}
+
+function formatMinutes(min) {
+  if (min < 60) return `${min}分`;
+  const h = Math.floor(min / 60), m = min % 60;
+  return m === 0 ? `${h}時間` : `${h}時間${m}分`;
+}
+
+/* 時間(分) → スライダー上の表示位置(%)
+   0〜120分(15分刻み区間)と120〜300分(30分刻み区間)を、
+   それぞれ「真の時間0分/120分/300分」を起点とした線形区間として扱う。
+   目盛りとつまみの位置計算を同じ式で行うことで、両者を完全に一致させる。 */
+const TIME_SEG_BOUNDARY_MM = 120;
+const TIME_SEG_BOUNDARY_PCT = (TIME_STEPS.indexOf(TIME_SEG_BOUNDARY_MM) / (TIME_STEPS.length - 1)) * 100;
+function mmToPercent(mm) {
+  if (mm <= TIME_SEG_BOUNDARY_MM) {
+    return (mm / TIME_SEG_BOUNDARY_MM) * TIME_SEG_BOUNDARY_PCT;
+  }
+  const maxMm = TIME_STEPS[TIME_STEPS.length - 1];
+  const t = (mm - TIME_SEG_BOUNDARY_MM) / (maxMm - TIME_SEG_BOUNDARY_MM);
+  return TIME_SEG_BOUNDARY_PCT + t * (100 - TIME_SEG_BOUNDARY_PCT);
+}
+
+function renderTimeTicks() {
+  const el = $("time-ticks");
+  const hourMarks = [0, 60, 120, 180, 240, 300]; // 0h,1h,2h,3h,4h,5h (分)
+  el.innerHTML = "";
+  for (const mm of hourMarks) {
+    const span = document.createElement("span");
+    span.style.left = `${mmToPercent(mm)}%`;
+    span.textContent = `${mm / 60}h`;
+    el.appendChild(span);
+  }
+}
+
+function renderTimeSlider() {
+  const slider = $("time-slider");
+  slider.max = String(TIME_STEPS.length - 1);
+  const idx = TIME_STEPS.indexOf(state.time);
+  const safeIdx = idx >= 0 ? idx : TIME_STEPS.indexOf(30);
+  slider.value = String(safeIdx);
+  $("time-value").textContent = formatMinutes(state.time);
+  $("time-thumb").style.left = `${mmToPercent(TIME_STEPS[safeIdx])}%`;
+}
+
+$("time-slider").addEventListener("input", (e) => {
+  state.time = TIME_STEPS[Number(e.target.value)];
+  $("time-value").textContent = formatMinutes(state.time);
+  $("time-thumb").style.left = `${mmToPercent(state.time)}%`;
+});
+$("time-slider").addEventListener("change", persistAndRender);
+
+/* ---------- 出発地点 ---------- */
+function setOrigin(lat, lng, label) {
+  state.origin = { lat, lng, label };
+  const st = $("location-status");
+  st.classList.add("ok");
+  $("location-status-text").textContent = `出発地点: ${label}`;
+  renderAll();
+}
+
+$("btn-geolocate").addEventListener("click", () => {
+  if (!navigator.geolocation) {
+    showAlert("エラー", "この端末では位置情報を利用できません。地名検索をお使いください。");
+    return;
+  }
+  $("location-status-text").textContent = "現在地を取得中...";
+  navigator.geolocation.getCurrentPosition(
+    (pos) => setOrigin(pos.coords.latitude, pos.coords.longitude, "現在地"),
+    () => {
+      $("location-status-text").textContent = "出発地点を設定してください";
+      showAlert("現在地を取得できませんでした", "位置情報の許可設定を確認するか、地名検索をお使いください。");
+    },
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+  );
+});
+
+async function searchPlace() {
+  const q = $("place-input").value.trim();
+  if (!q) return;
+  $("location-status-text").textContent = "地名を検索中...";
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=ja&q=${encodeURIComponent(q)}`;
+    const res = await fetch(url, { headers: { "Accept": "application/json" } });
+    if (!res.ok) throw new Error("network");
+    const data = await res.json();
+    if (!data.length) {
+      $("location-status-text").textContent = "出発地点を設定してください";
+      showAlert("見つかりませんでした", `「${q}」に一致する場所が見つかりませんでした。別の地名をお試しください。`);
+      return;
+    }
+    setOrigin(parseFloat(data[0].lat), parseFloat(data[0].lon), data[0].display_name.split(",")[0]);
+  } catch {
+    $("location-status-text").textContent = "出発地点を設定してください";
+    showAlert("エラー", "ネットワーク接続を確認してください");
+  }
+}
+$("btn-place-search").addEventListener("click", searchPlace);
+$("place-input").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); searchPlace(); } });
+
+/* ---------- ランダムウォーク検索 (要件定義書 §6 / SearchService相当) ---------- */
+function randomDestinationPoint() {
+  const t = TRANSPORT[state.transport];
+  const median = t.speed * (state.time / 60); // km
+  let distance;
+
+  if (state.time === 15) {
+    // 15分選択時のみ: 0〜15分の距離の範囲でランダムに決める
+    distance = median * Math.random();
+  } else {
+    // それ以外は従来通り、中央値の75%〜125%
+    distance = median * (0.75 + Math.random() * 0.5);
+  }
+
+  let bearing;
+  if (state.directions.length > 0) {
+    const pick = state.directions[Math.floor(Math.random() * state.directions.length)];
+    bearing = DIRECTIONS[pick].deg + (Math.random() * 90 - 45); // 中央値±45°
+  } else {
+    bearing = Math.random() * 360;
+  }
+  const rad = bearing * Math.PI / 180;
+
+  // 地球面の近似計算 (緯度1度 ≈ 111km、経度は緯度補正)
+  const dLat = (distance * Math.cos(rad)) / 111.0;
+  const dLng = (distance * Math.sin(rad)) / (111.0 * Math.cos(state.origin.lat * Math.PI / 180));
+  return { lat: state.origin.lat + dLat, lng: state.origin.lng + dLng, medianKm: median };
+}
+
+/* 検索半径: 中央値距離が大きい(=ばらつきが大きい)条件ほど広く取る。
+   1000m〜capMの範囲でクリップ (改善案#1)。
+   capMはリトライ回数に応じて呼び出し側が段階的に緩める(密度の低いジャンルの救済策)。 */
+function searchRadiusMeters(medianKm, capM = 4000) {
+  return Math.round(Math.max(1000, Math.min(capM, medianKm * 1000 * 0.4)));
+}
+
+/* 拠点スナップ: 理想の目的地点から一定距離以内に拠点(駅・市区町村役場)があれば、
+   そこを検索中心として採用する。ヒット率向上のため、人が集まる場所を起点にする。
+   スナップ許容範囲は中央値距離の30%(300m〜5000mでクリップ)。
+   範囲内に拠点がなければ理想の目的地点をそのまま使う(フォールバック)。
+   拠点データは国土数値情報(国土交通省)の鉄道データ(N02、全国9046駅)と
+   市区町村役場データ(P34、全国5774件)を統合した内部リスト(anchors.json、計14820件)を
+   起動時に1回だけ取得し、localStorageにキャッシュする。 */
+function anchorSnapRadiusMeters(medianKm) {
+  return Math.round(Math.max(300, Math.min(5000, medianKm * 1000 * 0.3)));
+}
+
+const ANCHORS_CACHE_KEY = "dokoiku_anchors_v1";
+let anchorsPromise = null;
+
+async function loadAnchors() {
+  if (anchorsPromise) return anchorsPromise;
+  anchorsPromise = (async () => {
+    try {
+      const cached = localStorage.getItem(ANCHORS_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        logDebug(`拠点データ: キャッシュから読み込み ${parsed.length}件`);
+        return parsed;
+      }
+    } catch { /* localStorage不可の環境ではキャッシュをスキップ */ }
+    try {
+      const res = await fetch("anchors.json");
+      if (!res.ok) {
+        logDebug(`拠点データ: 取得失敗 HTTP ${res.status}`);
+        return [];
+      }
+      const data = await res.json(); // [[name, lat, lng], ...]
+      try { localStorage.setItem(ANCHORS_CACHE_KEY, JSON.stringify(data)); } catch { /* 保存できなくても続行 */ }
+      logDebug(`拠点データ: サーバーから取得しキャッシュに保存 ${data.length}件`);
+      return data;
+    } catch (err) {
+      logDebug(`拠点データ: 取得エラー ${err && err.message}`);
+      return [];
+    }
+  })();
+  return anchorsPromise;
+}
+
+function findNearestAnchor(center, radiusM, anchors) {
+  const radiusKm = radiusM / 1000;
+  let nearest = null;
+  let nearestDist = Infinity;
+  for (const [name, lat, lng] of anchors) {
+    // 大まかな緯度経度差での事前フィルタ(全件haversine計算のコストを抑える)
+    if (Math.abs(lat - center.lat) > radiusKm / 111 * 1.5) continue;
+    const d = haversineKm(center, { lat, lng });
+    if (d <= radiusKm && d < nearestDist) { nearest = { name, lat, lng }; nearestDist = d; }
+  }
+  return nearest;
+}
+
+/* Overpassの公開ミラーサーバー(公式Wikiに掲載の全世界対応インスタンス)。
+   1回のルーレット実行内で、リトライのたびに順番に切り替えることで、
+   同一サーバーへの連続アクセスによるレート制限/過負荷を避ける。 */
+const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+];
+
+function buildOverpassQuery(center, filters, radiusM) {
+  const around = `(around:${radiusM},${center.lat.toFixed(6)},${center.lng.toFixed(6)})`;
+  // name/brandの絞り込みはクエリ側では行わない(重いaroundの実行回数を増やすだけで、
+  // 結果はどのみちoverpassSearch内のクライアント側フィルタで絞られるため冗長だった)
+  // relationは対象外(nw)。out centerでの中心算出が重く、広域の公園等でタイムアウト要因になるため。
+  // 各条件は必ずタグ絞り込みとセットにする(タグなしのaroundは範囲内の全地物を拾い極端に重くなる)。
+  const body = filters.map((f) => `${f}${around};`).join("\n");
+  return `[out:json][timeout:14];\n(\n${body}\n);\nout center 60;`;
+}
+
+// ページがバックグラウンドになった際に進行中の通信を即座に中断するため、
+// アクティブなAbortControllerを追跡する(iOS Safariはバックグラウンド中
+// setTimeoutの発火を大幅に遅延させるため、素直に待つと数十秒〜数分宙に浮く)
+const activeControllers = new Set();
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    for (const c of activeControllers) c.abort();
+  }
+});
+
+async function overpassSearch(center, filters, radiusM, endpoint) {
+  const controller = new AbortController();
+  activeControllers.add(controller);
+  const timeoutId = setTimeout(() => controller.abort(), 16000); // サーバー側14秒設定+マージン
+  let res;
+  try {
+    res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "data=" + encodeURIComponent(buildOverpassQuery(center, filters, radiusM)),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+    activeControllers.delete(controller);
+  }
+  if (!res.ok) throw new Error(`overpass HTTP ${res.status}`);
+  const data = await res.json();
+  return (data.elements || [])
+    .map((el) => {
+      const lat = el.lat ?? el.center?.lat;
+      const lng = el.lon ?? el.center?.lon;
+      const name = el.tags?.name || el.tags?.brand;
+      if (lat == null || lng == null || !name) return null;
+      return { id: `${el.type}/${el.id}`, name, lat, lng, tags: el.tags };
+    })
+    .filter(Boolean);
+}
+
+/* ---------- ステップ1: エリア決定(通信なし・即時) ---------- */
+async function decideArea() {
+  if (!state.origin) return;
+  const anchors = await loadAnchors(); // 初期化時に先読み済みのため通常は即時解決
+
+  // 通信を伴わないステップ1では、拠点が見つかるまで複数回試すコストが小さい。
+  // 拠点(駅・役所・道の駅・IC/SA・PA)はほぼ確実に陸地にあるため、
+  // 「拠点に当たるまで粘る」ことが、理想地点だけを使った場合に起こり得る
+  // 「海上・山中など到達不能な地点に着地する」リスクを大きく下げる。
+  const MAX_TRIES = 8;
+  let area = null;
+  let lastDest = null;
+
+  for (let i = 0; i < MAX_TRIES; i++) {
+    const dest = randomDestinationPoint();
+    lastDest = dest;
+    if (anchors.length === 0) break; // 拠点データ自体がなければ1回で確定(フォールバックのみ)
+
+    const snapRadiusM = anchorSnapRadiusMeters(dest.medianKm);
+    const anchor = findNearestAnchor(dest, snapRadiusM, anchors);
+    if (anchor) {
+      area = { lat: anchor.lat, lng: anchor.lng, medianKm: dest.medianKm, name: anchor.name, viaAnchor: true };
+      logDebug(`=== エリア決定(試行${i + 1}/${MAX_TRIES}): 拠点「${anchor.name}」(${anchor.lat},${anchor.lng}) 半径${snapRadiusM}m以内で発見`);
+      break;
+    }
+  }
+
+  if (!area) {
+    area = { lat: lastDest.lat, lng: lastDest.lng, medianKm: lastDest.medianKm, name: null, viaAnchor: false };
+    logDebug(`=== エリア決定: ${MAX_TRIES}回試しても拠点が見つからず、理想地点をそのまま採用 (${lastDest.lat.toFixed(5)},${lastDest.lng.toFixed(5)})`);
+  }
+
+  state.area = area;
+  showAreaScreen();
+}
+
+let areaMap = null;
+let areaMapLayers = [];
+function renderAreaMap(center) {
+  if (!areaMap) {
+    areaMap = L.map("area-map");
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(areaMap);
+  }
+  areaMapLayers.forEach((l) => areaMap.removeLayer(l));
+  areaMapLayers = [
+    L.circleMarker([center.lat, center.lng], {
+      radius: 8, color: "#fff", weight: 2, fillColor: "#007AFF", fillOpacity: 1,
+    }).addTo(areaMap).bindPopup(center.name || "この付近"),
+    L.circleMarker([state.origin.lat, state.origin.lng], {
+      radius: 6, color: "#fff", weight: 2, fillColor: "#8e8e93", fillOpacity: 1,
+    }).addTo(areaMap).bindPopup("出発地点"),
+  ];
+  areaMap.fitBounds(L.latLngBounds([state.origin.lat, state.origin.lng], [center.lat, center.lng]).pad(0.25));
+  areaMap.invalidateSize();
+}
+
+function showAreaScreen() {
+  const distKm = haversineKm(state.origin, state.area);
+  const distLabel = distKm >= 1 ? `約${distKm.toFixed(1)}km` : `約${Math.round(distKm * 1000)}m`;
+  $("area-name").textContent = state.area.name ? `「${state.area.name}」周辺` : "この付近";
+  $("area-distance").textContent = `出発地点から${distLabel}`;
+
+  $("setting-screen").classList.remove("active");
+  $("result-screen").classList.remove("active");
+  $("area-screen").classList.add("active");
+  document.querySelector(".content").scrollTop = 0;
+  renderAll();
+  setTimeout(() => renderAreaMap(state.area), 100);
+}
+
+/* ---------- ステップ2: 施設探し(エリア固定でOverpass検索) ---------- */
+function beginFacilitySearch() {
+  state.retryCount = 0;
+  state.excludedIds = new Set();
+  state.lastCandidates = null;
+  searchFacility();
+}
+
+async function searchFacility() {
+  if (state.phase === "loading" || !state.area) return;
+  state.phase = "loading";
+  $("loading").classList.add("visible");
+  const startedAt = Date.now();
+
+  const genreLabel = state.genres.length === 1 ? `${state.genres[0]}/${state.subGenre}` : state.genres.join("+") + "(各omakase・試行ごとにランダム選択)";
+  logDebug(`=== 施設探し開始(エリア固定) ジャンル=${genreLabel} 中心=(${state.area.lat.toFixed(5)},${state.area.lng.toFixed(5)})${state.area.name ? ` 「${state.area.name}」` : ""}`);
+
+  try {
+    let candidates = [];
+    // ミラーの開始位置をランダム化(毎回同じサーバーから始まると、そのサーバーだけ
+    // 負荷が集中してレート制限にかかりやすくなるため)
+    const mirrorStart = Math.floor(Math.random() * OVERPASS_ENDPOINTS.length);
+
+    // エリア(中心点)は固定したまま、検索半径だけを段階的に広げて最大5回リトライ。
+    // 目的地点・拠点の再抽選はステップ1(エリア決定画面)でのみ行う。
+    // 全体で40秒を超えたら打ち切る(失敗が続いた際に延々と待たせないため)
+    const SEARCH_BUDGET_MS = 40000;
+    for (let attempt = 0; attempt < 5 && candidates.length === 0; attempt++) {
+      if (document.hidden) {
+        logDebug(`  ページが非表示のため打ち切り`);
+        break;
+      }
+      if (attempt > 0) {
+        if (Date.now() - startedAt > SEARCH_BUDGET_MS) {
+          logDebug(`  時間上限(${SEARCH_BUDGET_MS / 1000}秒)に達したため打ち切り`);
+          break;
+        }
+        // サーバーへの連続アクセスを緩和するため、試行の間に短い間隔を空ける
+        await new Promise((r) => setTimeout(r, 600));
+        if (document.hidden) {
+          logDebug(`  ページが非表示のため打ち切り`);
+          break;
+        }
+      }
+      // 1〜2回目は上限4000mのまま。3回目以降は密度の低いジャンル救済のため上限だけを緩める
+      // (4000m→6000m→8000m)。中央値距離の40%が元々上限未満の条件には影響しない。
+      const radiusCapM = attempt < 2 ? 4000 : attempt === 2 ? 6000 : 8000;
+      const radiusM = searchRadiusMeters(state.area.medianKm, radiusCapM);
+      // エリアが拠点スナップ由来なら、施設密度が高い前提で半径を縮小する(従来通り)
+      const effectiveRadiusM = state.area.viaAnchor ? Math.max(500, Math.round(radiusM * 0.6)) : radiusM;
+
+      // ジャンルを試行ごとに決定: 複数選択時はランダムに1つ選び、そのomakaseで検索する
+      // (複数ジャンルの条件を1クエリにまとめるとOverpass側の負荷が増すため避ける)
+      const genreKey = state.genres[Math.floor(Math.random() * state.genres.length)];
+      const genre = GENRES[genreKey];
+      const useSubGenre = state.genres.length === 1 && state.subGenre !== "omakase";
+      const subFilters = useSubGenre ? genre.sub[state.subGenre].filters : genre.sub.omakase.filters;
+      const omakaseFilters = genre.sub.omakase.filters;
+
+      logDebug(`[試行${attempt + 1}/5] ジャンル=${genreKey}${useSubGenre ? "/" + state.subGenre : "(omakase)"} 検索半径=${effectiveRadiusM}m(上限${radiusCapM}m)`);
+
+      // ミラーサーバーを試行ごとに切り替え、同一サーバーへの連続アクセスを避ける
+      const endpoint = OVERPASS_ENDPOINTS[(mirrorStart + attempt) % OVERPASS_ENDPOINTS.length];
+      const endpointHost = endpoint.replace(/^https?:\/\//, "").split("/")[0];
+
+      // 1回の試行が失敗(タイムアウト等)しても、ループ全体を落とさず次のリトライに進む
+      try {
+        const t0 = Date.now();
+        candidates = await overpassSearch(state.area, subFilters, effectiveRadiusM, endpoint);
+        logDebug(`  サブジャンル検索[${endpointHost}]: ${candidates.length}件 (${Date.now() - t0}ms)`);
+        // 検索クエリの緩和: サブジャンル→大ジャンル (§6.6)
+        if (candidates.length === 0 && useSubGenre) {
+          const t1 = Date.now();
+          candidates = await overpassSearch(state.area, omakaseFilters, effectiveRadiusM, endpoint);
+          logDebug(`  大ジャンル緩和検索[${endpointHost}]: ${candidates.length}件 (${Date.now() - t1}ms)`);
+        }
+      } catch (err) {
+        const reason = err && err.name === "AbortError"
+          ? (document.hidden ? "中断(バックグラウンドのため)" : "タイムアウト(16秒)")
+          : (err && err.message) || "不明なエラー";
+        logDebug(`  検索失敗[${endpointHost}]: ${reason}`);
+        candidates = [];
+      }
+
+      // 同一セッション内で既に提示済みの施設は除外する(もう一回での重複防止)
+      candidates = candidates.filter((c) => !state.excludedIds.has(c.id));
+    }
+
+    // ローディング最低0.5秒表示
+    const elapsed = Date.now() - startedAt;
+    if (elapsed < 500) await new Promise((r) => setTimeout(r, 500 - elapsed));
+
+    if (candidates.length === 0) {
+      logDebug(`=== 5回全て失敗。候補なし (${Date.now() - startedAt}ms) ===`);
+      failToIdle("条件に合う場所が\n見つかりませんでした",
+        "ジャンルを変える、エリアを引き直す、などをお試しください。");
+      return;
+    }
+
+    logDebug(`=== 成功: ${candidates.length}件の候補から抽選 (合計${Date.now() - startedAt}ms) ===`);
+    state.lastCandidates = candidates;
+    presentRandomPick();
+  } catch (err) {
+    logDebug(`=== 想定外のエラー: ${err && err.message} ===`);
+    const elapsed = Date.now() - startedAt;
+    if (elapsed < 500) await new Promise((r) => setTimeout(r, 500 - elapsed));
+    failToIdle("検索に失敗しました", "ネットワーク接続を確認して、もう一度お試しください。");
+  }
+}
+
+function presentRandomPick() {
+  const pool = state.lastCandidates.filter((c) => !state.excludedIds.has(c.id));
+  if (pool.length === 0) {
+    failToIdle("候補がなくなりました", "条件を変えてみますか？");
+    return;
+  }
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  state.excludedIds.add(pick.id);
+  state.result = pick;
+  state.phase = "result";
+  $("loading").classList.remove("visible");
+  showResultScreen(pick);
+}
+
+function failToIdle(title, message) {
+  state.phase = "idle";
+  $("loading").classList.remove("visible");
+  showAlert(title.replace(/\n/g, ""), message);
+}
+
+/* ---------- 結果画面 ---------- */
+let map = null;
+let mapLayers = [];
+
+function haversineKm(a, b) {
+  const R = 6371, toRad = (d) => d * Math.PI / 180;
+  const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function categoryLabel(tags) {
+  for (const key of ["amenity", "shop", "leisure", "tourism", "historic", "natural", "highway"]) {
+    if (tags[key] && TAG_LABELS[tags[key]]) return TAG_LABELS[tags[key]];
+    if (key === "historic" && tags.historic) return "史跡";
+  }
+  return "";
+}
+
+function addressLabel(tags, distanceKm) {
+  const parts = [tags["addr:province"], tags["addr:city"], tags["addr:suburb"] || tags["addr:quarter"] || tags["addr:neighbourhood"]].filter(Boolean);
+  const dist = distanceKm >= 1 ? `約${distanceKm.toFixed(1)}km` : `約${Math.round(distanceKm * 1000)}m`;
+  return parts.length ? `${parts.join("")}（${dist}）` : `出発地点から${dist}`;
+}
+
+function showResultScreen(facility) {
+  const distKm = haversineKm(state.origin, facility);
+  const estMin = Math.max(1, Math.round((distKm / TRANSPORT[state.transport].speed) * 60));
+
+  $("result-name").textContent = facility.name;
+  $("result-category").textContent = categoryLabel(facility.tags);
+  $("result-time").textContent = `${formatMinutes(estMin)}（${TRANSPORT[state.transport].label}）`;
+  $("result-address").textContent = addressLabel(facility.tags, distKm);
+
+  $("setting-screen").classList.remove("active");
+  $("area-screen").classList.remove("active");
+  $("result-screen").classList.add("active");
+  document.querySelector(".content").scrollTop = 0;
+
+  // 5段階アニメーション (0.1/0.2/0.35/0.45/0.55s)
+  document.querySelectorAll("#result-screen .anim").forEach((el) => {
+    el.classList.remove("anim-header", "anim-scale", "anim-left", "anim-up", "anim-fade");
+    el.style.opacity = "0";
+    setTimeout(() => el.classList.add(el.dataset.anim), Number(el.dataset.delay));
+  });
+
+  // 地図: 現在地+施設のピン2つ、インタラクティブ (読み替え表#4)
+  setTimeout(() => {
+    if (!map) {
+      map = L.map("map");
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19,
+      }).addTo(map);
+    }
+    mapLayers.forEach((l) => map.removeLayer(l));
+    mapLayers = [
+      L.marker([facility.lat, facility.lng]).addTo(map).bindPopup(facility.name),
+      L.circleMarker([state.origin.lat, state.origin.lng], {
+        radius: 8, color: "#fff", weight: 2, fillColor: "#007AFF", fillOpacity: 1,
+      }).addTo(map).bindPopup("出発地点"),
+    ];
+    map.fitBounds(L.latLngBounds([state.origin.lat, state.origin.lng], [facility.lat, facility.lng]).pad(0.25));
+    map.invalidateSize();
+  }, 500);
+}
+
+function goHome() {
+  state.phase = "idle";
+  state.result = null;
+  state.area = null;
+  $("result-screen").classList.remove("active");
+  $("area-screen").classList.remove("active");
+  $("setting-screen").classList.add("active");
+  document.querySelector(".content").scrollTop = 0;
+}
+
+/* Mapsで開く (MapLauncher相当 / 読み替え表#3) */
+function buildMapsUrl(point) {
+  const mode = TRANSPORT[state.transport].mapMode;
+  return state.mapApp === "google"
+    ? `https://www.google.com/maps/dir/?api=1&destination=${point.lat},${point.lng}&travelmode=${mode.google}`
+    : `https://maps.apple.com/?daddr=${point.lat},${point.lng}&dirflg=${mode.apple}`;
+}
+
+function openMaps() {
+  if (!state.result) return;
+  window.open(buildMapsUrl(state.result), "_blank");
+}
+
+/* エリア決定画面から、施設を特定せずそのまま行き先(拠点または理想地点)をMapsで開く */
+function openMapsForArea() {
+  if (!state.area) return;
+  window.open(buildMapsUrl(state.area), "_blank");
+}
+
+/* もう一回(結果画面): セッション内最大3回。まず候補プールから再抽選し、
+   プールが尽きたら同一エリア(state.area)のまま施設探しをやり直す (§4.3) */
+function retryFacility() {
+  if (state.retryCount >= 3) {
+    showAlert("再抽選は3回までです", "エリアを変えてみますか？");
+    return;
+  }
+  state.retryCount++;
+  const pool = (state.lastCandidates || []).filter((c) => !state.excludedIds.has(c.id));
+  if (pool.length > 0) {
+    presentRandomPick();
+    return;
+  }
+  logDebug(`--- もう一回: 候補プールが尽きたため同一エリアで再検索 ---`);
+  searchFacility();
+}
+
+$("btn-decide-area").addEventListener("click", decideArea);
+$("btn-area-retry").addEventListener("click", decideArea);
+$("btn-area-home").addEventListener("click", goHome);
+$("btn-search-facility").addEventListener("click", beginFacilitySearch);
+$("btn-open-maps-area").addEventListener("click", openMapsForArea);
+$("btn-open-maps").addEventListener("click", openMaps);
+$("btn-retry").addEventListener("click", retryFacility);
+$("btn-home").addEventListener("click", goHome);
+
+/* ---------- アラート / トースト ---------- */
+function showAlert(title, message) {
+  logDebug(`[ALERT] ${title.replace(/\n/g, "")}: ${message}`);
+  $("alert-title").textContent = title;
+  $("alert-message").textContent = message;
+  $("alert").classList.add("visible");
+}
+$("alert-ok").addEventListener("click", () => $("alert").classList.remove("visible"));
+
+let toastTimer = null;
+function showToast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("visible");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("visible"), 2000);
+}
+
+/* ---------- デバッグログ ---------- */
+const DEBUG_LOG_MAX = 300;
+let debugLog = [];
+
+function logDebug(msg) {
+  const d = new Date();
+  const ts = d.toTimeString().slice(0, 8) + "." + String(d.getMilliseconds()).padStart(3, "0");
+  debugLog.push(`[${ts}] ${msg}`);
+  if (debugLog.length > DEBUG_LOG_MAX) debugLog.shift();
+  renderDebugLog();
+}
+
+function renderDebugLog() {
+  const el = $("debug-log-text");
+  if (el) el.textContent = debugLog.length ? debugLog.join("\n") : "(まだログがありません)";
+}
+
+$("btn-toggle-debug").addEventListener("click", () => {
+  const panel = $("debug-panel");
+  const willShow = panel.style.display === "none";
+  panel.style.display = willShow ? "" : "none";
+  if (willShow) {
+    renderDebugLog();
+    const el = $("debug-log-text");
+    requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+  }
+});
+
+$("btn-copy-log").addEventListener("click", async () => {
+  const text = debugLog.join("\n");
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast("ログをコピーしました");
+  } catch {
+    // Clipboard APIが使えない環境向けフォールバック: テキストを選択状態にする
+    const el = $("debug-log-text");
+    if (el && window.getSelection) {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    showToast("選択したので手動でコピーしてください");
+  }
+});
+
+$("btn-clear-log").addEventListener("click", () => {
+  debugLog = [];
+  renderDebugLog();
+});
+
+/* ---------- 初期化 ---------- */
+renderTimeTicks();
+renderAll();
+loadAnchors();
+</script>
+</body>
+</html>
