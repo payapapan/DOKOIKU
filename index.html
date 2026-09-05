@@ -992,10 +992,8 @@ function randomDestinationPoint() {
   let distance;
 
   if (state.time === 15) {
-    // 15分選択時のみ: 0〜15分の範囲に収める(検索半径ぶんの余白を残してサンプリング)
-    const baseRadiusKm = searchRadiusMeters(median, 4000) / 1000;
-    const idealMaxKm = Math.max(0, median - baseRadiusKm);
-    distance = idealMaxKm * Math.random();
+    // 15分選択時のみ: 0〜15分の距離の範囲でランダムに決める
+    distance = median * Math.random();
   } else {
     // それ以外は従来通り、中央値の75%〜125%
     distance = median * (0.75 + Math.random() * 0.5);
